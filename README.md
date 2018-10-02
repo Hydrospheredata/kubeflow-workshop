@@ -64,7 +64,7 @@ kubectl create secret generic aws-creds --from-literal=awsAccessKeyID=${AWS_ACCE
 Create a user (if RBAC is enabled):
 
 ```
-kubectl apply -f tf-user.yaml
+kubectl apply -f service-account.yaml
 ```
 
 ## Run the workflow
