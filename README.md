@@ -46,7 +46,7 @@ Deploy HydroServing platform:
 ```
 helm repo add hydro-serving https://hydrospheredata.github.io/hydro-serving-helm/
 
-helm install --name kubeflow hydro-serving/serving
+helm install --name kubeflow --namespace hydroflow hydro-serving/serving 
 ```
 
 More details and configurations docs are [here](https://github.com/Hydrospheredata/hydro-serving-helm)
@@ -58,13 +58,13 @@ export AWS_ACCESS_KEY_ID=<aws-key-id>
 export AWS_SECRET_ACCESS_KEY=<aws-secret-access-key>
 
 kubectl create secret generic aws-creds --from-literal=awsAccessKeyID=${AWS_ACCESS_KEY_ID} \
-  --from-literal=awsSecretAccessKey=${AWS_SECRET_ACCESS_KEY}
+  --from-literal=awsSecretAccessKey=${AWS_SECRET_ACCESS_KEY} --namespace hydroflow
 ```
 
 Create a user (if RBAC is enabled):
 
 ```
-kubectl apply -f service-account.yaml
+kubectl apply -f service-account.yaml --namespace hydroflow
 ```
 
 ## Run the workflow
@@ -81,13 +81,13 @@ argo submit model-workflow.yaml \
 
 For Argo UI access share the related port:
 ```
-kubectl port-forward deployment/argo-ui 8001:8001
+kubectl port-forward deployment/argo-ui 8001:8001 --namespace hydroflow
 ```
 The Argo UI should be available now at http://localhost:8001/
 
 For HydroServing UI access forward the related port:
 ```
-kubectl port-forward deployment/kubeflow-sidecar 8080:8080
+kubectl port-forward deployment/kubeflow-sidecar 8080:8080  --namespace hydroflow
 ```
 You should now be able to visit http://localhost:8080/
 
@@ -96,7 +96,7 @@ You should now be able to visit http://localhost:8080/
 To clean workflow pods you shoud detect its unique name:
 
 ```
-argo list
+argo list --namespace hydroflow
 
 NAME                   STATUS      AGE   DURATION
 hydro-workflow-rpr6f   Succeeded   6m    1m
@@ -107,5 +107,5 @@ hydro-workflow-npx4l   Succeeded   35m   29s
 
 Then you can easily remove workflow:
 ```
-argo delete <workflow-name>
+argo delete --namespace hydroflow <workflow-name>
 ```
