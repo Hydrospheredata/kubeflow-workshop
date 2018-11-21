@@ -1,0 +1,46 @@
+data:
+  base_path: '/data/'
+  conversation_fname: 'movie_conversations.txt'
+  line_fname: 'movie_lines.txt'
+  processed_path: 'tiny_processed_data'
+  max_seq_length: 60
+  word_threshold: 2
+  sentence_diff: 0.33
+
+  PAD_ID: 0
+  UNK_ID: 1
+  START_ID: 2
+  EOS_ID: 3
+
+model:
+  batch_size: 2
+  num_layers: 1
+  num_units: 16
+  embed_dim: 16
+  embed_share: false
+  cell_type: lstm
+  dropout: 0.2
+  encoder_type: bi
+  attention_mechanism: bahdanau
+
+train:
+  learning_rate: 0.001
+  sampling_probability: 0.25
+
+  train_steps: 20000
+  model_dir: 'logs/check_tiny'
+
+  save_checkpoints_steps: 1000
+  loss_hook_n_iter: 1
+  check_hook_n_iter: 10
+  min_eval_frequency: 10
+
+  print_verbose: True
+  debug: False
+
+predict:
+  beam_width: 0
+  length_penalty_weight: 1.0
+
+slack:
+  webhook_url: ""

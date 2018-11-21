@@ -1,0 +1,21 @@
+version: v2-alpha
+kind: Model
+name: tokenizer
+model-type: python:3.6
+payload:
+  - "src/"
+  - "requirements.txt"
+  - "nltk_data/"
+
+contract:
+  tokenize:
+    inputs:
+      x:
+        shape: [-1, 1]
+        type: string
+        profile: text
+    outputs:
+      input_data:
+        shape: [-1, 1]
+        type: string
+        profile: text
