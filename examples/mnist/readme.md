@@ -1,4 +1,4 @@
-# Train and deliver models to production with a single command
+# Train, Deliver and Monitor ML Models to Production with a Single Command
 
 Very often a workflow of training models and delivering them to the production environment contains huge gaps of manual work. Those could be either building a Docker image and deploying it to the Kubernetes cluster or packing the model to the Python package and installing it to your Python application. Or even changing your Java classes with the defined weights and re-compiling the whole project. Not to mention that all of this should be followed by testing your model's performance (which is not just a check of the ability to compile). Can this be interpreted as continuous delivery if you do it by hands? What if you could run the whole process of assembling/training/deploying/testing/running model via single command in your terminal? 
 
@@ -8,6 +8,7 @@ Let me show you how you can build the whole workflow of data gathering / model t
 
 This tutorial will be done on a Kubernetes single node cluster created with Minikube. You will additionally need: 
 
+- Docker
 - Helm
 - Kubectl 
 - Ksonnet
@@ -22,7 +23,7 @@ $ minikube start
 $ helm init
 ```
 
-After that create a working directory where will be stored a model's files and initialize a ksonnet project inside that directory.
+After that create a working directory where will be stored model's files and initialize a ksonnet project inside that directory.
 
 ```sh
 $ mkdir mnist; cd mnist
@@ -138,7 +139,7 @@ Steps above define the whole environment that we need for our needs. Next we wil
 
 ## Data gathering
 
-Create directory `image`. This directory will hold all files of our model. 
+Create directory `image`. This directory will hold all files of our model. (Think of it as of Docker image, not the actual digit picture).
 
 ```sh
 $ mkdir image; cd image
@@ -289,7 +290,7 @@ if __name__ == "__main__":
 
 ## Building classification model
 
-For the model building we will use Tensorflow high level Estimator API.
+As the model backend we will use Tensorflow high-level Estimator API.
 
 ```python
 # mnist-model.py
@@ -338,11 +339,13 @@ if __name__ == "__main__":
     estimator.export_savedmodel(models_path, serving_input_receiver_fn)
 ```
 
-Here we define a function `input_fn` that will produce images for our DNN Classifier. The network itself consists of 2 hidden layers with 256 and 64 units respectively. As an activation function we use the default ReLU activation. As an optimizer we chose Adam with the learning rate that is configurable from the outside (via environment variable). After the training image is stored in `saved_model` format.
+Here we define a function `input_fn` that will produce images for our DNN Classifier. The network itself consists of 2 fully-connected hidden layers with 256 and 64 units respectively. As an activation function we use the default ReLU activation. As an optimizer we chose Adam with the learning rate that is configurable from the outside (via environment variable). After the training the model is stored in `saved_model` format under the specified path. We store both the graph and the weights. 
 
 ## Building concept model
 
-To test, that our model actually works on the data that we trained it on, we need to capture the essense of tha training data, a so-called "concept". To do that we will additionally train an autoencoder to extract the most important features of our data. The difference between the reconstructed image and the original image will be our measure of "correctness" of the data. Higher L2-distance indicates that observed images are less likely to be from the training set. 
+To test that our model actually works on the data which is similar to the training set, we need to capture the essense of the training data. To do that we will additionally train an autoencoder to extract the most important features from the data. The difference between the reconstructed image and the original image will be our measure of "correctness" of the data. Higher L2-distance indicates that image is less likely to be from the training (or similiar) dataset. 
+
+We chose to build this model with lower level Tensorflow API as it offers us more flexibility, but also produces more boilerplate code. 
 
 ```python
 # mnist-concept.py
@@ -436,4 +439,251 @@ with tf.Session() as sess:
     builder.save()
 ```
 
-Same as in the previous section, we train the image and export it in the `saved_model` format. This exports the full graph and variables in binary format and saves it under specified directory. 
+Same as in the previous section, we train the image and export it in the `saved_model` format. 
+
+## Packing image
+
+Now, that we've done with our model, we need to build a Docker image from it. This will be our working image and it will contain all working files, that will be used during the training state. The image will be based on a raw Python Docker image, so we will need to additionally install some packages during the building stage. Create `requirements.txt` file. 
+
+```
+numpy==1.14.3
+Pillow==5.2.0
+tensorflow==1.9.0
+hs==0.1.3
+```
+
+Now we can create a `Dockerfile`.
+
+```Dockerfile
+FROM python:3.6-slim
+ADD ./requirements.txt /src/requirements.txt
+RUN pip install -r /src/requirements.txt
+ADD ./*.py /src/
+ADD ./*.yaml /src/
+WORKDIR /src/
+```
+
+Build an image and publish it in your public/private Docker registry. In the simpliest case it might be your personal [Docker Hub](https://hub.docker.com/) account. 
+
+```sh
+$ docker build -t {username}/mnist . 
+$ docker push {username}/mnist:latest
+```
+
+Here we're naming the image with `mnist` name. By default it will be assigned with the `latest` tag. 
+
+## Creating workflow 
+
+As we've mentioned abobe, we will define the whole workflow using Argo's workflows. Create a `model-workflow.yaml` and add a basic structure to it.
+
+```yaml 
+# model-workflow.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: 
+  generateName: hydro-workflow-
+spec:
+  entrypoint: mnist-workflow
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data
+    - name: models
+      persistentVolumeClaim:
+        claimName: models
+  templates:
+  - name: mnist-workflow
+    steps:
+    - - name: download-mnist
+        template: nil
+      - name: download-not-mnist
+        template: nil
+    - - name: train-mnist
+        template: nil
+      - name: train-mnist-concept
+        template: nil
+    - - name: upload
+        template: nil
+    - - name: deploy
+        template: nil
+    - - name: test
+        template: nil
+```
+
+Here we define persistent volumes created above, all workflow steps and some other metadata. Downloading and Training will be done in parallel, while uploading/deploying/testing will be done consequently. Let's start with the downloading. We will do that with Kubernetes Jobs. 
+
+```yaml
+- name: download
+  inputs: 
+    parameters:
+      - name: file
+      value: download-file
+  resource:
+    action: apply
+    successCondition: status.succeeded == 1
+    failureCondition: status.failed > 3
+    manifest: |
+      apiVersion: batch/v1
+      kind: Job
+      metadata: 
+        name: {{inputs.parameters.file}}
+      spec: 
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+            - name: main
+              image: {username}/mnist
+              command: ["python"]
+              args: ["{{inputs.parameters.file}}.py"]
+              volumeMounts:
+              - name: data
+                mountPath: /data
+              env:
+              - name: MNIST_DATA_DIR
+                value: {{workflow.parameters.mnist-data-dir}}
+              - name: notMNIST_DATA_DIR
+                value: {{workflow.parameters.notmnist-data-dir}}
+              volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: data
+```
+
+As a base we use the container that we've built before. We have additionally provided some environment variables which we use in the downloading scripts. Environment variabels are specified via Argo parameters, which can be declared globally or locally. Global parameters are specified in one place and can be reached from everythere in the file, while local parameters are only specific to the declaration template. Using local parameters allows us to use a single template and specify which file we want to run. Let's put it all together. 
+
+```yaml
+# model-workflow.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: 
+  generateName: hydro-workflow-
+spec:
+  arguments:
+    parameters:
+    - name: mnist-data-dir
+      value: /data/mnist
+    - name: notmnist-data-dir
+      value: /data/notmnist
+  entrypoint: mnist-workflow
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data
+    - name: models
+      persistentVolumeClaim:
+        claimName: models
+  templates:
+  - name: mnist-workflow
+    steps:
+    - - name: download-mnist
+        template: download
+        arguments:
+          parameters:
+            - name: file
+              value: download-mnist
+      - name: download-not-mnist
+        template: download
+        arguments:
+          parameters:
+            - name: file
+              value: download-notmnist
+    - - name: train-mnist
+        template: nil
+      - name: train-mnist-concept
+        template: nil
+    - - name: upload
+        template: nil
+    - - name: deploy
+        template: nil
+    - - name: test
+        template: nil
+  - name: download
+    inputs: 
+      parameters:
+      - name: file
+        value: download-file
+    resource:
+      action: apply
+      successCondition: status.succeeded == 1
+      failureCondition: status.failed > 3
+      manifest: |
+        apiVersion: batch/v1
+        kind: Job
+        metadata: 
+          name: {{inputs.parameters.file}}
+        spec: 
+          template:
+            spec:
+              restartPolicy: Never
+              containers:
+              - name: main
+                image: tidylobster/mnist
+                command: ["python"]
+                args: ["{{inputs.parameters.file}}.py"]
+                volumeMounts:
+                - name: data
+                  mountPath: /data
+                env:
+                - name: MNIST_DATA_DIR
+                  value: {{workflow.parameters.mnist-data-dir}}
+                - name: notMNIST_DATA_DIR
+                  value: {{workflow.parameters.notmnist-data-dir}}
+              volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: data
+```
+
+I will now breafly describe next templates' definitions and then we will join them altogether. The next template is training.
+
+```yaml
+- name: train
+  inputs: 
+    parameters:
+    - name: file
+        value: training-file
+  resource: 
+    action: apply
+    successCondition: status.tfReplicaStatuses.Master.succeeded == 1
+    failureCondition: status.tfReplicaStatuses.Master.failed > 3
+    manifest: |
+    apiVersion: kubeflow.org/v1alpha2
+    kind: TFJob
+    metadata:
+        name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
+    spec:
+        tfReplicaSpecs:
+        Master:
+            replicas: 1
+            template:
+            spec:
+                containers:
+                - name: tensorflow
+                    image: tidylobster/mnist
+                    command: ["python"]
+                    args: ["{{inputs.parameters.file}}.py"]
+                    volumeMounts:
+                    - name: data
+                        mountPath: /data
+                    - name: models
+                        mountPath: /models
+                    env:
+                    - name: MNIST_MODELS_DIR
+                        value: {{workflow.parameters.mnist-models-dir}}
+                    - name: MNIST_DATA_DIR
+                        value: {{workflow.parameters.mnist-data-dir}}
+                    - name: notMNIST_MODELS_DIR
+                        value: {{workflow.parameters.notmnist-models-dir}}
+                    - name: notMNIST_DATA_DIR
+                        value: {{workflow.parameters.notmnist-data-dir}}
+                volumes:
+                - name: data
+                    persistentVolumeClaim:
+                    claimName: data
+                - name: models
+                    persistentVolumeClaim:
+                    claimName: models
+```

@@ -18,7 +18,7 @@ spec:
     - name: model-name
       value: mnist
     - name: host-address
-      value: http://hydro-serving-sidecar-serving.default.svc.cluster.local:8080
+      value: https://dev.k8s.hydrosphere.io
     - name: application-name
       value: mnist-app
     - name: signature-name
@@ -59,13 +59,13 @@ spec:
         arguments:
           parameters:
             - name: file
-              value: mnist-concept-drift
+              value: mnist-concept
     - - name: upload
         template: upload-models
     - - name: deploy
         template: deploy-applications
-    - - name: warm-up
-        template: warm-up-model
+    # - - name: warm-up
+    #     template: warm-up-model
   - name: download
     inputs: 
       parameters:
@@ -170,6 +170,7 @@ spec:
       image: tidylobster/mnist
       command: ["bash"]
       source: |
+        hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
         hs cluster use {{workflow.parameters.cluster-name}}
         hs apply -f application.yaml
   - name: warm-up-model
@@ -181,7 +182,7 @@ spec:
         apiVersion: batch/v1
         kind: Job
         metadata: 
-          name: {{inputs.parameters.file}}
+          name: model-warm-up-{{workflow.parameters.job-name}}
         spec: 
           template:
             spec:
