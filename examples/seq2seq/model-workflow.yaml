@@ -1,0 +1,213 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hydro-workflow-
+spec:
+  entrypoint: hydro-workflow-demo
+
+  arguments:
+    parameters:
+      - name: job-name
+        value: myjob
+      - name: s3-endpoint
+        value: s3.eu-central-1.amazonaws.com
+      - name: s3-use-https
+        value: true
+      - name: s3-verify-ssl
+        value: true
+      - name: aws-region
+        value: eu-central-1
+      - name: aws-secret
+        value: aws-creds
+      - name: s3-bucket
+        value: hydro-serving-kubeflow-demo
+      - name: s3-path
+        value: "seq2seq-model-{{workflow.uid}}"
+      - name: model-name
+        value: "seq2seq-model"
+      - name: serving-release-name
+        value: "kubeflow"
+      - name: serving-namespace
+        value: "hydroflow"
+      - name: config
+        # value: "check_tiny"
+        value: "cornell-movie-dialogs"
+
+  templates:
+    - name: hydro-workflow-demo
+      steps:
+      - - name: download
+          template: download-data
+      - - name: preprocess
+          template: preprocess-data
+      - - name: train
+          template: run-training
+      # - - name: deploy
+      #     template: run-upload
+      # - - name: cleanup
+      #     template: clean
+
+    - name: download-data
+      resource: 
+        action: apply
+        successCondition: status.succeeded == 1
+        failureCondition: status.failed > 3
+        manifest: | 
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: download-data
+          spec:
+            backoffLimit: 4
+            template:
+              spec:
+                containers:
+                - name: tensorflow
+                  image: tidylobster/conversation-tensorflow
+                  command: ["sh"]
+                  args: ["/src/scripts/prepare_Cornell_Movie-Dialogs_Corpus.sh"]
+                  volumeMounts:
+                  - name: data
+                    mountPath: "/data"
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: data
+                restartPolicy: Never
+
+    - name: preprocess-data
+      resource: 
+        action: apply
+        successCondition: status.succeeded == 1
+        failureCondition: status.failed > 3
+        manifest: | 
+          apiVersion: batch/v1
+          kind: Job
+          metadata: 
+            name: preprocess-data
+          spec:
+            backoffLimit: 4
+            template:
+              spec: 
+                containers:
+                - name: tensorflow
+                  image: tidylobster/conversation-tensorflow
+                  command: ["python3"]
+                  args: ["/src/data_loader.py", "--config", {{workflow.parameters.config}}]
+                  volumeMounts:
+                  - name: data
+                    mountPath: "/data"
+                volumes: 
+                  - name: data
+                    persistentVolumeClaim: 
+                      claimName: data
+                restartPolicy: Never
+
+    - name: run-training
+      resource:
+        action: apply
+        successCondition: status.tfReplicaStatuses.Worker.succeeded == 1
+        manifest: |
+          apiVersion: "kubeflow.org/v1alpha2"
+          kind: "TFJob"
+          metadata: 
+            name: {{workflow.parameters.job-name}}
+          spec: 
+            tfReplicaSpecs:
+              Master:
+                replicas: 1
+                template:
+                  spec:
+                    restartPolicy: OnFailure
+                    containers:
+                    - name: tensorflow
+                      image: tidylobster/conversation-tensorflow
+                      imagePullPolicy: Always
+                      ports:
+                      - containerPort: 2222
+                      command: ["python3", "/src/main.py", "--config", {{workflow.parameters.config}}]
+                      volumeMounts:  
+                      - name: data
+                        mountPath: "/data"
+                      - name: models
+                        mountPath: "/model"
+                    volumes:
+                      - name: data
+                        persistentVolumeClaim:
+                          claimName: data
+                      - name: models
+                        persistentVolumeClaim:
+                          claimName: models
+              PS:
+                replicas: 1
+                template:
+                  spec:
+                    restartPolicy: OnFailure
+                    containers:
+                    - name: tensorflow
+                      image: tidylobster/conversation-tensorflow
+                      imagePullPolicy: Always
+                      ports:
+                      - containerPort: 2222
+                      command: ["python3", "/src/main.py", "--config", {{workflow.parameters.config}}]
+                      volumeMounts:  
+                      - name: data
+                        mountPath: "/data"
+                      - name: models
+                        mountPath: "/model"
+                    volumes:
+                      - name: data
+                        persistentVolumeClaim:
+                          claimName: data
+                      - name: models
+                        persistentVolumeClaim:
+                          claimName: models
+              Worker:
+                replicas: 1
+                template:
+                  spec:
+                    restartPolicy: OnFailure
+                    containers:
+                    - name: tensorflow
+                      image: tidylobster/conversation-tensorflow
+                      imagePullPolicy: Always
+                      ports:
+                      - containerPort: 2222
+                      command: ["python3", "/src/main.py", "--config", {{workflow.parameters.config}}]
+                      volumeMounts:  
+                      - name: data
+                        mountPath: "/data"
+                      - name: models
+                        mountPath: "/model"
+                    volumes:
+                      - name: data
+                        persistentVolumeClaim:
+                          claimName: data
+                      - name: models
+                        persistentVolumeClaim:
+                          claimName: models
+          
+    # - name: run-upload
+    #   script:
+    #     image: hydrosphere/hydro-serving-kubeflow-demo-hs:3
+    #     command: ["bash"]
+    #     env:
+    #       - name: AWS_ACCESS_KEY_ID
+    #         valueFrom:
+    #           secretKeyRef:
+    #             name: "{{workflow.parameters.aws-secret}}"
+    #             key: awsAccessKeyID
+    #       - name: AWS_SECRET_ACCESS_KEY
+    #         valueFrom:
+    #           secretKeyRef:
+    #             name: "{{workflow.parameters.aws-secret}}"
+    #             key: awsSecretAccessKey
+    #     source: |
+    #       aws s3 cp --recursive s3://{{workflow.parameters.s3-bucket}}/lstm-model-{{workflow.uid}} ./{{workflow.parameters.model-name}}
+    #       cd /{{workflow.parameters.model-name}}
+    #       hs upload --host hydro-serving-sidecar-{{workflow.parameters.serving-release-name}}.{{workflow.parameters.serving-namespace}}.svc.cluster.local --port 8080
+    # - name: clean
+    #   container:
+    #     image: nervana/circleci:master
+    #     imagePullPolicy: IfNotPresent
+    #     command: ["bash", "-c", "kubectl delete tfjob {{workflow.parameters.job-name}} || true"]

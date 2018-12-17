@@ -1,0 +1,6 @@
+hb-config
+nltk
+tqdm
+requests
+numpy
+tensorflow

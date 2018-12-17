@@ -1,0 +1,122 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hydro-workflow-
+spec:
+  entrypoint: hydro-workflow-demo
+  arguments:
+    parameters:
+      - name: model-train-steps
+        value: 200
+      - name: model-batch-size
+        value: 100
+      - name: model-learning-rate
+        value: 0.01
+      - name: job-name
+        value: myjob
+      - name: s3-endpoint
+        value: s3.us-east-1.amazonaws.com
+      - name: s3-use-https
+        value: true
+      - name: s3-verify-ssl
+        value: true
+      - name: aws-region
+        value: us-east-1
+      - name: aws-secret
+        value: aws-creds
+      - name: s3-bucket
+        value: tidylobster-kubeflow-demo
+      - name: s3-path
+        value: "lstm-model-{{workflow.uid}}"
+      - name: model-name
+        value: "lstm-model"
+      - name: serving-release-name
+        value: "kubeflow"
+      - name: serving-namespace
+        value: "hydroflow"
+  templates:
+    - name: hydro-workflow-demo
+      steps:
+      - - name: train
+          template: run-training
+      - - name: deploy
+          template: run-upload
+      - - name: cleanup
+          template: clean
+    - name: run-training
+      resource:
+        action: apply
+        successCondition: status.tfReplicaStatuses.Master.succeeded == 1
+        manifest: |
+          apiVersion: "kubeflow.org/v1alpha2"
+          kind: "TFJob"
+          metadata:
+            name: {{workflow.parameters.job-name}}
+            namespace: {{workflow.parameters.namespace}}
+          spec:
+            tfReplicaSpecs:
+              Master:
+                replicas: 1
+                template:
+                  spec:
+                    serviceAccountName: tf-job-operator
+                    containers:
+                      - image: hydrosphere/hydro-serving-kubeflow-demo-model:4
+                        name: tensorflow
+                        imagePullPolicy: Always
+                        env:
+                          - name: TF_TRAIN_STEPS
+                            value: "{{workflow.parameters.model-train-steps}}"
+                          - name: TF_BATCH_SIZE
+                            value: "{{workflow.parameters.model-batch-size}}"
+                          - name: TF_LEARNING_RATE
+                            value: "{{workflow.parameters.model-learning-rate}}"
+                          - name: AWS_ACCESS_KEY_ID
+                            valueFrom:
+                              secretKeyRef:
+                                name: {{workflow.parameters.aws-secret}}
+                                key: awsAccessKeyID
+                          - name: AWS_SECRET_ACCESS_KEY
+                            valueFrom:
+                              secretKeyRef:
+                                name: {{workflow.parameters.aws-secret}}
+                                key: awsSecretAccessKey
+                          - name: AWS_DEFAULT_REGION
+                            value: {{workflow.parameters.aws-region}}
+                          - name: AWS_REGION
+                            value: {{workflow.parameters.aws-region}}
+                          - name: S3_REGION
+                            value: {{workflow.parameters.aws-region}}
+                          - name: S3_USE_HTTPS
+                            value: "{{workflow.parameters.s3-use-https}}"
+                          - name: S3_VERIFY_SSL
+                            value: "{{workflow.parameters.s3-verify-ssl}}"
+                          - name: S3_ENDPOINT
+                            value: {{workflow.parameters.s3-endpoint}}
+                          - name: MODEL_SAVE_PATH
+                            value: "s3://{{workflow.parameters.s3-bucket}}/{{workflow.parameters.s3-path}}"
+                    restartPolicy: OnFailure
+    - name: run-upload
+      script:
+        image: hydrosphere/hydro-serving-kubeflow-demo-hs:3
+        command: ["bash"]
+        env:
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: "{{workflow.parameters.aws-secret}}"
+                key: awsAccessKeyID
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: "{{workflow.parameters.aws-secret}}"
+                key: awsSecretAccessKey
+        source: |
+          aws s3 cp --recursive s3://{{workflow.parameters.s3-bucket}}/lstm-model-{{workflow.uid}} ./{{workflow.parameters.model-name}}
+          cd /{{workflow.parameters.model-name}}
+          hs upload --host hydro-serving-manager-{{workflow.parameters.serving-release-name}}.{{workflow.parameters.serving-namespace}}.svc.cluster.local --port 9090
+    - name: clean
+      container:
+        image: nervana/circleci:master
+        imagePullPolicy: IfNotPresent
+        command: ["bash", "-c", "kubectl delete tfjob {{workflow.parameters.job-name}} || true"]
