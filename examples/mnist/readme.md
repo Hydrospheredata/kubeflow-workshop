@@ -220,74 +220,6 @@ if __name__ == "__main__":
 
 As you can see files will be stored either in the directory defined by the `MNIST_DATA_DIR` environmnet variable, or locally under the `data/mnist` path if `MNIST_DATA_DIR` variable is unset. 
 
-For the testing purposes we will also download a `notMNIST` dataset, which closely resembles MNIST - same 28x28px images, same 10 classes, but now those are letters and not digits.  
-
-```python
-# download-notmnist.py
-
-from PIL import Image
-import struct, numpy
-import os, gzip, tarfile, shutil, glob
-import urllib, urllib.parse, urllib.request
-
-
-def download_files(base_url, base_dir, files):
-    """ Download required data """
-
-    downloaded = []
-    os.makedirs(base_dir, exist_ok=True)
-
-    for file in files:
-        print(f"Started downloading {file}")
-        download_url = urllib.parse.urljoin(base_url, file)
-        download_path = os.path.join(base_dir, file)
-        local_file, _ = urllib.request.urlretrieve(download_url, download_path)
-        unpack_file(local_file, base_dir)
-    
-    return downloaded
-
-
-def unpack_file(file, base_dir):
-    """ Unpack the compressed file. """
-
-    print(f"Unpacking {file}")
-    with tarfile.open(file) as f_tar: 
-        f_tar.extractall(base_dir)
-    os.remove(file)
-
-
-def preprocess_notmnist_files(path, dataset):
-    """ Preprocess downloaded notMNIST datasets. """
-
-    print(f"Preprocessing {os.path.join(path, dataset)}")
-    files = glob.glob(os.path.join(path, dataset, "**", "*.png"))
-    imgs = numpy.zeros((len(files), 28, 28))
-    labels = numpy.zeros((len(files),))
-    for index, file in enumerate(files): 
-        try: 
-            label = os.path.split(os.path.dirname(file))[-1]
-            imgs[index,:,:] = numpy.array(Image.open(file))
-            labels[index] = ord(label) - ord("A")
-        except: pass
-
-    shutil.rmtree(os.path.join(path, dataset), ignore_errors=True)
-    numpy.savez_compressed(os.path.join(path, dataset), imgs=imgs, labels=labels)
-
-
-if __name__ == "__main__": 
-    notmnist_dir = os.environ.get("notMNIST_DATA_DIR", "data/notmnist")
-    notmnist_files = [
-        "notMNIST_small.tar.gz",]
-        # "notMNIST_large.tar.gz"]
-
-    download_files(
-        base_url="http://yaroslavvb.com/upload/notMNIST/",
-        base_dir=notmnist_dir,
-        files=notmnist_files)
-    preprocess_notmnist_files(notmnist_dir, "notMNIST_small")
-    # preprocess_notmnist_files(notmnist_dir, "notMNIST_large")
-```
-
 ## Building classification model
 
 As the model backend we will use Tensorflow high-level Estimator API.
@@ -511,7 +443,11 @@ spec:
         template: nil
 ```
 
-Here we define persistent volumes created above, all workflow steps and some other metadata. Downloading and Training will be done in parallel, while uploading/deploying/testing will be done consequently. Let's start with the downloading. We will do that with Kubernetes Jobs. 
+Here we define persistent volumes created above, all workflow steps and some other metadata. Downloading and Training will be done in parallel, while uploading/deploying/testing will be done consequently. 
+
+### Download template
+
+Let's start with the downloading. We will do that with Kubernetes Jobs. 
 
 ```yaml
 - name: download
@@ -637,7 +573,9 @@ spec:
                   claimName: data
 ```
 
-I will now breafly describe next templates' definitions and then we will join them altogether. The next template is training.
+I will now breafly describe each templates' definition and then join them altogether. The next template is training.
+
+### Training template
 
 ```yaml
 - name: train
