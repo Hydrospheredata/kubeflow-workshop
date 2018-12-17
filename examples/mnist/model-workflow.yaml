@@ -32,34 +32,28 @@ spec:
   templates:
   - name: mnist-workflow
     steps:
-    # - - name: download-mnist
-    #     template: execute-python
-    #     arguments:
-    #       parameters:
-    #         - name: file
-    #           value: download-mnist
-    #   - name: download-not-mnist
-    #     template: execute-python
-    #     arguments:
-    #       parameters:
-    #         - name: file
-    #           value: download-notmnist
-    # - - name: train-mnist
-    #     template: train
-    #     arguments:
-    #       parameters:
-    #         - name: file
-    #           value: mnist-model
-    #   - name: train-mnist-concept-drift
-    #     template: train
-    #     arguments:
-    #       parameters:
-    #         - name: file
-    #           value: mnist-concept
-    # - - name: upload
-    #     template: upload-models
-    # - - name: deploy
-    #     template: deploy-applications
+    - - name: download-mnist
+        template: execute-python
+        arguments:
+          parameters:
+            - name: file
+              value: download-mnist
+    - - name: train-mnist
+        template: train
+        arguments:
+          parameters:
+            - name: file
+              value: mnist-model
+      - name: train-mnist-concept-drift
+        template: train
+        arguments:
+          parameters:
+            - name: file
+              value: mnist-concept
+    - - name: upload
+        template: upload-models
+    - - name: deploy
+        template: deploy-applications
     - - name: test
         template: execute-python
         arguments:
@@ -96,8 +90,8 @@ spec:
                 env:
                 - name: MNIST_DATA_DIR
                   value: {{workflow.parameters.mnist-data-dir}}
-                - name: notMNIST_DATA_DIR
-                  value: {{workflow.parameters.notmnist-data-dir}}
+                - name: MNIST_MODELS_DIR
+                  value: {{workflow.parameters.mnist-models-dir}}
                 - name: HOST_ADDRESS
                   value: {{workflow.parameters.host-address}}
                 - name: APPLICATION_NAME
@@ -145,10 +139,6 @@ spec:
                           value: {{workflow.parameters.mnist-models-dir}}
                         - name: MNIST_DATA_DIR
                           value: {{workflow.parameters.mnist-data-dir}}
-                        - name: notMNIST_MODELS_DIR
-                          value: {{workflow.parameters.notmnist-models-dir}}
-                        - name: notMNIST_DATA_DIR
-                          value: {{workflow.parameters.notmnist-data-dir}}
                   volumes:
                     - name: data
                       persistentVolumeClaim:

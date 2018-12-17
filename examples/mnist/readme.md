@@ -653,7 +653,7 @@ spec:
               restartPolicy: Never
               containers:
               - name: main
-                image: tidylobster/mnist
+                image: {username}/mnist
                 command: ["python"]
                 args: ["{{inputs.parameters.file}}.py"]
                 volumeMounts:
@@ -705,7 +705,7 @@ With this step we've already covered the downloading and the testing stages of o
         spec:
         containers:
             - name: tensorflow
-              image: tidylobster/mnist
+              image: {username}/mnist
               command: ["python"]
               args: ["{{inputs.parameters.file}}.py"]
               volumeMounts:
@@ -759,7 +759,7 @@ In this step we create a working `hs cluster` and provide the address, where the
 ```yaml
 - name: deploy-applications
   script:
-    image: tidylobster/mnist
+    image: {username}/mnist
     command: ["bash"]
     source: |
       hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
@@ -788,7 +788,7 @@ spec:
     - name: model-name
       value: mnist
     - name: host-address
-      value: https://dev.k8s.hydrosphere.io
+      value: http://localhost
     - name: application-name
       value: mnist-app
     - name: signature-name
@@ -812,12 +812,6 @@ spec:
           parameters:
             - name: file
               value: download-mnist
-      - name: download-not-mnist
-        template: execute-python
-        arguments:
-          parameters:
-            - name: file
-              value: download-notmnist
     - - name: train-mnist
         template: train
         arguments:
@@ -860,7 +854,7 @@ spec:
               restartPolicy: Never
               containers:
               - name: main
-                image: tidylobster/mnist
+                image: {username}/mnist
                 imagePullPolicy: Always
                 command: ["python"]
                 args: ["{{inputs.parameters.file}}.py"]
@@ -870,8 +864,8 @@ spec:
                 env:
                 - name: MNIST_DATA_DIR
                   value: {{workflow.parameters.mnist-data-dir}}
-                - name: notMNIST_DATA_DIR
-                  value: {{workflow.parameters.notmnist-data-dir}}
+                - name: MNIST_MODELS_DIR
+                  value: {{workflow.parameters.mnist-models-dir}}
                 - name: HOST_ADDRESS
                   value: {{workflow.parameters.host-address}}
                 - name: APPLICATION_NAME
@@ -906,7 +900,7 @@ spec:
                 spec:
                   containers:
                     - name: tensorflow
-                      image: tidylobster/mnist
+                      image: {username}/mnist
                       command: ["python"]
                       args: ["{{inputs.parameters.file}}.py"]
                       volumeMounts:
@@ -919,10 +913,6 @@ spec:
                           value: {{workflow.parameters.mnist-models-dir}}
                         - name: MNIST_DATA_DIR
                           value: {{workflow.parameters.mnist-data-dir}}
-                        - name: notMNIST_MODELS_DIR
-                          value: {{workflow.parameters.notmnist-models-dir}}
-                        - name: notMNIST_DATA_DIR
-                          value: {{workflow.parameters.notmnist-data-dir}}
                   volumes:
                     - name: data
                       persistentVolumeClaim:
@@ -932,7 +922,7 @@ spec:
                         claimName: models
   - name: upload-models
     script: 
-      image: tidylobster/mnist
+      image: {username}/mnist
       command: ["bash"]
       source: |
         hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
@@ -950,12 +940,13 @@ spec:
         mountPath: /models
   - name: deploy-applications
     script:
-      image: tidylobster/mnist
+      image: {username}/mnist
       command: ["bash"]
       source: |
         hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
         hs cluster use {{workflow.parameters.cluster-name}}
         hs apply -f application.yaml
+        
 ```
 
 ## Running workflow 
