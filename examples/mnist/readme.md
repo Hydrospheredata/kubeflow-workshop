@@ -562,8 +562,8 @@ During workflow execution we would need to run different Python scripts includin
               env:
               - name: MNIST_DATA_DIR
                 value: {{workflow.parameters.mnist-data-dir}}
-              - name: notMNIST_DATA_DIR
-                value: {{workflow.parameters.notmnist-data-dir}}
+              - name: MNIST_MODELS_DIR
+                value: {{workflow.parameters.mnist-model-dir}}
               - name: HOST_ADDRESS
                 value: {{workflow.parameters.host-address}}
               - name: APPLICATION_NAME
@@ -592,8 +592,8 @@ spec:
     parameters:
     - name: mnist-data-dir
       value: /data/mnist
-    - name: notmnist-data-dir
-      value: /data/notmnist
+    - name: mnist-model-dir
+      value: /models/mnist
     - name: host-address
       value: http://localhost
     - name: application-name
@@ -662,8 +662,8 @@ spec:
                 env:
                 - name: MNIST_DATA_DIR
                   value: {{workflow.parameters.mnist-data-dir}}
-                - name: notMNIST_DATA_DIR
-                  value: {{workflow.parameters.notmnist-data-dir}}
+                - name: MNIST_MODELS_DIR
+                  value: {{workflow.parameters.mnist-model-dir}}
                 - name: HOST_ADDRESS
                   value: {{workflow.parameters.host-address}}
                 - name: APPLICATION_NAME
@@ -715,7 +715,7 @@ With this step we've already covered the downloading and the testing stages of o
                 mountPath: /models
               env:
               - name: MNIST_MODELS_DIR
-                value: {{workflow.parameters.mnist-models-dir}}
+                value: {{workflow.parameters.mnist-model-dir}}
               - name: MNIST_DATA_DIR
                 value: {{workflow.parameters.mnist-data-dir}}
               volumes:
@@ -729,3 +729,42 @@ With this step we've already covered the downloading and the testing stages of o
 
 Kubeflow allows you to perform distributed Tensorflow training and manages all devices for you. You don't have to create Chief/Master replications or Prameter Server/Worker instances on your own. Since MNIST model is quite simple we allowed ourselves to train it only within one Master replica. 
 
+### Uploading template
+
+```yaml
+- name: upload-models
+  script: 
+    image: {username}/mnist
+    command: ["bash"]
+    source: |
+      hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
+      hs cluster use {{workflow.parameters.cluster-name}}
+
+      cd {{workflow.parameters.mnist-models-dir}}/concept
+      hs upload --name {{workflow.parameters.model-name}}-concept
+
+      cd {{workflow.parameters.mnist-models-dir}}/model
+      export CD_LATEST_ESTIMATOR_MODEL="cd $(ls -t | head -n1)"
+      ${CD_LATEST_ESTIMATOR_MODEL}
+      hs upload --name {{workflow.parameters.model-name}}                      
+    volumeMounts:
+    - name: models
+      mountPath: /models
+```
+
+In this step we create a working `hs cluster` and provide the address, where the ML Lambda is running. After that we just upload 2 trained models. 
+
+### Deploying template
+
+```yaml
+- name: deploy-applications
+  script:
+    image: tidylobster/mnist
+    command: ["bash"]
+    source: |
+      hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
+      hs cluster use {{workflow.parameters.cluster-name}}
+      hs apply -f application.yaml
+```
+
+In this step we create from uploaded models end-point applications, defined in our `application.yaml`. 
