@@ -754,7 +754,7 @@ Kubeflow allows you to perform distributed Tensorflow training and manages all d
 
 In this step we create a working `hs cluster` and provide the address, where the ML Lambda is running. After that we just upload 2 trained models. 
 
-### Deploying template
+### Deployment template
 
 ```yaml
 - name: deploy-applications
@@ -768,3 +768,202 @@ In this step we create a working `hs cluster` and provide the address, where the
 ```
 
 In this step we create from uploaded models end-point applications, defined in our `application.yaml`. 
+
+The overall workflow should look like the following: 
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: 
+  generateName: hydro-workflow-
+spec:
+  arguments:
+    parameters:
+    - name: mnist-data-dir
+      value: /data/mnist
+    - name: mnist-models-dir
+      value: /models/mnist
+    - name: cluster-name
+      value: local
+    - name: model-name
+      value: mnist
+    - name: host-address
+      value: https://dev.k8s.hydrosphere.io
+    - name: application-name
+      value: mnist-app
+    - name: signature-name
+      value: predict
+    - name: warmup-images-amount
+      value: 1000
+  entrypoint: mnist-workflow
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data
+    - name: models
+      persistentVolumeClaim:
+        claimName: models
+  templates:
+  - name: mnist-workflow
+    steps:
+    - - name: download-mnist
+        template: execute-python
+        arguments:
+          parameters:
+            - name: file
+              value: download-mnist
+      - name: download-not-mnist
+        template: execute-python
+        arguments:
+          parameters:
+            - name: file
+              value: download-notmnist
+    - - name: train-mnist
+        template: train
+        arguments:
+          parameters:
+            - name: file
+              value: mnist-model
+      - name: train-mnist-concept-drift
+        template: train
+        arguments:
+          parameters:
+            - name: file
+              value: mnist-concept
+    - - name: upload
+        template: upload-models
+    - - name: deploy
+        template: deploy-applications
+    - - name: test
+        template: execute-python
+        arguments:
+          parameters:
+            - name: file
+              value: client
+  - name: execute-python
+    inputs: 
+      parameters:
+      - name: file
+        value: download-file
+    resource:
+      action: apply
+      successCondition: status.succeeded == 1
+      failureCondition: status.failed > 3
+      manifest: |
+        apiVersion: batch/v1
+        kind: Job
+        metadata: 
+          name: {{inputs.parameters.file}}
+        spec: 
+          template:
+            spec:
+              restartPolicy: Never
+              containers:
+              - name: main
+                image: tidylobster/mnist
+                imagePullPolicy: Always
+                command: ["python"]
+                args: ["{{inputs.parameters.file}}.py"]
+                volumeMounts:
+                - name: data
+                  mountPath: /data
+                env:
+                - name: MNIST_DATA_DIR
+                  value: {{workflow.parameters.mnist-data-dir}}
+                - name: notMNIST_DATA_DIR
+                  value: {{workflow.parameters.notmnist-data-dir}}
+                - name: HOST_ADDRESS
+                  value: {{workflow.parameters.host-address}}
+                - name: APPLICATION_NAME
+                  value: {{workflow.parameters.application-name}}
+                - name: SIGNATURE_NAME
+                  value: {{workflow.parameters.signature-name}}
+                - name: WARMUP_IMAGES_AMOUNT
+                  value: "{{workflow.parameters.warmup-images-amount}}"
+              volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: data
+  - name: train
+    inputs: 
+      parameters:
+        - name: file
+          value: training-file
+    resource: 
+      action: apply
+      successCondition: status.tfReplicaStatuses.Master.succeeded == 1
+      failureCondition: status.tfReplicaStatuses.Master.failed > 3
+      manifest: |
+        apiVersion: kubeflow.org/v1alpha2
+        kind: TFJob
+        metadata:
+          name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
+        spec:
+          tfReplicaSpecs:
+            Master:
+              replicas: 1
+              template:
+                spec:
+                  containers:
+                    - name: tensorflow
+                      image: tidylobster/mnist
+                      command: ["python"]
+                      args: ["{{inputs.parameters.file}}.py"]
+                      volumeMounts:
+                        - name: data
+                          mountPath: /data
+                        - name: models
+                          mountPath: /models
+                      env:
+                        - name: MNIST_MODELS_DIR
+                          value: {{workflow.parameters.mnist-models-dir}}
+                        - name: MNIST_DATA_DIR
+                          value: {{workflow.parameters.mnist-data-dir}}
+                        - name: notMNIST_MODELS_DIR
+                          value: {{workflow.parameters.notmnist-models-dir}}
+                        - name: notMNIST_DATA_DIR
+                          value: {{workflow.parameters.notmnist-data-dir}}
+                  volumes:
+                    - name: data
+                      persistentVolumeClaim:
+                        claimName: data
+                    - name: models
+                      persistentVolumeClaim:
+                        claimName: models
+  - name: upload-models
+    script: 
+      image: tidylobster/mnist
+      command: ["bash"]
+      source: |
+        hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
+        hs cluster use {{workflow.parameters.cluster-name}}
+
+        cd {{workflow.parameters.mnist-models-dir}}/concept
+        hs upload --name {{workflow.parameters.model-name}}-concept
+
+        cd {{workflow.parameters.mnist-models-dir}}/model
+        export CD_LATEST_ESTIMATOR_MODEL="cd $(ls -t | head -n1)"
+        ${CD_LATEST_ESTIMATOR_MODEL}
+        hs upload --name {{workflow.parameters.model-name}}                      
+      volumeMounts:
+      - name: models
+        mountPath: /models
+  - name: deploy-applications
+    script:
+      image: tidylobster/mnist
+      command: ["bash"]
+      source: |
+        hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
+        hs cluster use {{workflow.parameters.cluster-name}}
+        hs apply -f application.yaml
+```
+
+## Running workflow 
+
+The single command line is this: 
+
+```sh
+$ argo submit model-workflow.yaml \
+    --serviceaccount tf-user 
+    -p job-name job-name=job-$(uuidgen  | cut -c -5 | tr '[:upper:]' '[:lower:]')
+```

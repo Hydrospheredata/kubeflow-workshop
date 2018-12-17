@@ -9,10 +9,6 @@ spec:
       value: /data/mnist
     - name: mnist-models-dir
       value: /models/mnist
-    - name: notmnist-data-dir
-      value: /data/notmnist
-    - name: notmnist-models-dir
-      value: /models/notmnist
     - name: cluster-name
       value: local
     - name: model-name
@@ -36,37 +32,41 @@ spec:
   templates:
   - name: mnist-workflow
     steps:
-    - - name: download-mnist
-        template: download
+    # - - name: download-mnist
+    #     template: execute-python
+    #     arguments:
+    #       parameters:
+    #         - name: file
+    #           value: download-mnist
+    #   - name: download-not-mnist
+    #     template: execute-python
+    #     arguments:
+    #       parameters:
+    #         - name: file
+    #           value: download-notmnist
+    # - - name: train-mnist
+    #     template: train
+    #     arguments:
+    #       parameters:
+    #         - name: file
+    #           value: mnist-model
+    #   - name: train-mnist-concept-drift
+    #     template: train
+    #     arguments:
+    #       parameters:
+    #         - name: file
+    #           value: mnist-concept
+    # - - name: upload
+    #     template: upload-models
+    # - - name: deploy
+    #     template: deploy-applications
+    - - name: test
+        template: execute-python
         arguments:
           parameters:
             - name: file
-              value: download-mnist
-      - name: download-not-mnist
-        template: download
-        arguments:
-          parameters:
-            - name: file
-              value: download-notmnist
-    - - name: train-mnist
-        template: train
-        arguments:
-          parameters:
-            - name: file
-              value: mnist-model
-      - name: train-mnist-concept-drift
-        template: train
-        arguments:
-          parameters:
-            - name: file
-              value: mnist-concept
-    - - name: upload
-        template: upload-models
-    - - name: deploy
-        template: deploy-applications
-    # - - name: warm-up
-    #     template: warm-up-model
-  - name: download
+              value: client
+  - name: execute-python
     inputs: 
       parameters:
       - name: file
@@ -87,6 +87,7 @@ spec:
               containers:
               - name: main
                 image: tidylobster/mnist
+                imagePullPolicy: Always
                 command: ["python"]
                 args: ["{{inputs.parameters.file}}.py"]
                 volumeMounts:
@@ -97,6 +98,14 @@ spec:
                   value: {{workflow.parameters.mnist-data-dir}}
                 - name: notMNIST_DATA_DIR
                   value: {{workflow.parameters.notmnist-data-dir}}
+                - name: HOST_ADDRESS
+                  value: {{workflow.parameters.host-address}}
+                - name: APPLICATION_NAME
+                  value: {{workflow.parameters.application-name}}
+                - name: SIGNATURE_NAME
+                  value: {{workflow.parameters.signature-name}}
+                - name: WARMUP_IMAGES_AMOUNT
+                  value: "{{workflow.parameters.warmup-images-amount}}"
               volumes:
               - name: data
                 persistentVolumeClaim:
@@ -173,43 +182,4 @@ spec:
         hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
         hs cluster use {{workflow.parameters.cluster-name}}
         hs apply -f application.yaml
-  - name: warm-up-model
-    resource:
-      action: apply
-      successCondition: status.succeeded == 1
-      failureCondition: status.failed > 3
-      manifest: |
-        apiVersion: batch/v1
-        kind: Job
-        metadata: 
-          name: model-warm-up-{{workflow.parameters.job-name}}
-        spec: 
-          template:
-            spec:
-              restartPolicy: Never
-              containers:
-              - name: main
-                image: tidylobster/mnist
-                command: ["python"]
-                args: ["client.py"]
-                volumeMounts:
-                - name: data
-                  mountPath: /data
-                env:
-                - name: MNIST_DATA_DIR
-                  value: {{workflow.parameters.mnist-data-dir}}
-                - name: notMNIST_DATA_DIR
-                  value: {{workflow.parameters.notmnist-data-dir}}
-                - name: HOST_ADDRESS
-                  value: {{workflow.parameters.host-address}}
-                - name: APPLICATION_NAME
-                  value: {{workflow.parameters.application-name}}
-                - name: SIGNATURE_NAME
-                  value: {{workflow.parameters.signature-name}}
-                - name: WARMUP_IMAGES_AMOUNT
-                  value: {{workflow.parameters.warmup-images-amount}}
-              volumes:
-              - name: data
-                persistentVolumeClaim:
-                  claimName: data
         
