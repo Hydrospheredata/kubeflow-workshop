@@ -1,12 +1,12 @@
-# Train, Deliver and Monitor ML Models to Production with a Single Command
+# Train and deliver ML models to production with a single command
 
 Very often a workflow of training models and delivering them to the production environment contains huge gaps of manual work. Those could be either building a Docker image and deploying it to the Kubernetes cluster or packing the model to the Python package and installing it to your Python application. Or even changing your Java classes with the defined weights and re-compiling the whole project. Not to mention that all of this should be followed by testing your model's performance (which is not just a check of the ability to compile). Can this be interpreted as continuous delivery if you do it by hands? What if you could run the whole process of assembling/training/deploying/testing/running model via single command in your terminal? 
 
-Let me show you how you can build the whole workflow of data gathering / model training / model deployment / model testing in a single file and how you can tune hyperparameters for all of this stages from one place. 
+Let me show you how you can build the whole workflow of data gathering / model training / model deployment / model testing within a single file and how you can run it with one single command. 
 
 ## Prerequisites
 
-This tutorial will be done on a Kubernetes single node cluster created with Minikube. You will additionally need: 
+This tutorial will be done on a Kubernetes single node cluster. You will additionally need: 
 
 - Docker
 - Helm
@@ -16,12 +16,7 @@ This tutorial will be done on a Kubernetes single node cluster created with Mini
 
 ## Environment Preparation
 
-Start a cluster and install Helm Tiller on it. 
-
-```sh
-$ minikube start 
-$ helm init
-```
+Start a cluster and install Helm Tiller on it (`helm init`).
 
 After that create a working directory where will be stored model's files and initialize a ksonnet project inside that directory.
 
@@ -83,7 +78,7 @@ spec:
 $ kubectl apply -f pvc.yaml
 ```
 
-Minikube v0.26+ uses RBAC by default. We will need to grant access for training ops. Let's define `service-account.yaml` for it. 
+If RBAC is enabled on the cluster, we will need to additionally grant an access for training ops. Let's define `service-account.yaml` for it. 
 
 ```yaml
 # service-account.yaml
@@ -275,7 +270,7 @@ Here we define a function `input_fn` that will produce images for our DNN Classi
 
 ## Building concept model
 
-To test that our model actually works on the data which is similar to the training set, we need to capture the essense of the training data. To do that we will additionally train an autoencoder to extract the most important features from the data. The difference between the reconstructed image and the original image will be our measure of "correctness" of the data. Higher L2-distance indicates that image is less likely to be from the training (or similiar) dataset. 
+To test that our model actually works on the data which is similar to the training set, we need to capture the essense of the training set. To do that we will additionally train an autoencoder to extract the most important features from the data. The difference between the reconstructed image based on the extracted features and the original image will be our measure of "correctness" of the data. Higher L2-distance indicates that image is less likely to be from the training (or similiar) dataset. 
 
 We chose to build this model with lower level Tensorflow API as it offers us more flexibility, but also produces more boilerplate code. 
 
@@ -373,9 +368,82 @@ with tf.Session() as sess:
 
 Same as in the previous section, we train the image and export it in the `saved_model` format. 
 
+## Preparing applications manifest
+
+When you upload a model, ML Lambda packs it to a Docker image, freezes it, marks it with a version and stores in the Models section. But in order to inference on that model you have to deploy it via end-point applications. To create that application, you have to provied `application.yaml`. 
+
+```yaml
+version: v2-alpha
+kind: Application
+name: mnist-concept-app
+singular:
+  model: mnist-concept:1
+  runtime: hydrosphere/serving-runtime-tensorflow:1.7.0-latest
+---
+version: v2-alpha
+kind: Application
+name: mnist-app
+singular:
+  model: mnist:1
+  runtime: hydrosphere/serving-runtime-tensorflow:1.7.0-latest
+  monitoring:
+    - name: autoencoder
+      input: imgs
+      type: Autoencoder
+      app: mnist-concept-app
+      healthcheck:
+        enabled: true
+        threshold: 0.1
+```
+
+This file creates two applications: one with the actual model and one with the concept model. Concept model (`mnist-concept-app`) will be additionally applied on top of actual model (`mnist-app`) as a monitoring service. We will discuss its inference later. 
+
+## Integration tests
+
+After deployment step is done, we need to perform integractions tests to ensure, that the model runs properly. Create a `client.py` file, which will send a few images to the deployed model and perform evaluation.
+
+```python
+# client.py
+
+import os
+import time
+import requests
+import numpy as np
+
+host_address = os.environ.get("HOST_ADDRESS", "http://localhost")
+application_name = os.environ.get("APPLICATION_NAME", "mnist-app")
+signature_name = os.environ.get("SIGNATURE_NAME", "predict")
+warmup_images_count = int(os.environ.get("WARMUP_IMAGES_AMOUNT", 100))
+
+mnist_base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
+test_file = "t10k.npz"
+
+
+# Import MNIST data
+with np.load(os.path.join(mnist_base_path, test_file)) as data:
+    imgs, labels = data["imgs"], data["labels"]
+np.random.shuffle(imgs)
+imgs = imgs[:warmup_images_count//2]
+
+# Generate noise data
+noise = np.random.uniform(size=imgs.shape)
+data = np.concatenate((imgs, imgs+noise))
+
+for image in data:
+    # Warm up application
+    image = [image.tolist()]
+    r = requests.post(
+        url=f"{host_address}/gateway/applications/{application_name}/{signature_name}", 
+        json={'imgs': image})
+    print("predicted class", r.json()["class_ids"])
+    time.sleep(0.6)
+```
+
+This will print all evaluation statistics in the pod logs. 
+
 ## Packing image
 
-Now, that we've done with our model, we need to build a Docker image from it. This will be our working image and it will contain all working files, that will be used during the training state. The image will be based on a raw Python Docker image, so we will need to additionally install some packages during the building stage. Create `requirements.txt` file. 
+The next step will be building the Docker image from the model. This image will be the working image and it will contain all files that will be executed during the workflow steps. As a base image we will use `python:3.6-slim` image. Since this would be a raw Python container, we would also need to install a few python packages inside it. Create a `requirements.txt` file. 
 
 ```
 numpy==1.14.3
@@ -395,10 +463,39 @@ ADD ./*.yaml /src/
 WORKDIR /src/
 ```
 
+After the last step the whole directory should look like this:
+
+```
+├── demo
+│   ├── app.yaml
+mnist
+│   ├── components
+│   │   └── ...
+│   ├── environments
+│   │   └── default
+│   │       └── ...
+│   ├── lib
+│   │   └── ...
+│   └── vendor
+│       └── kubeflow
+│           └── ...
+├── model-workflow.yaml
+├── service-account.yaml
+├── storage.yaml
+└── image
+    ├── Dockerfile
+    ├── application.yaml
+    ├── client.py
+    ├── download-mnist.py
+    ├── mnist-concept.py
+    ├── mnist-model.py
+    └── requirements.txt
+```
+
 Build an image and publish it in your public/private Docker registry. In the simpliest case it might be your personal [Docker Hub](https://hub.docker.com/) account. 
 
 ```sh
-$ docker build -t {username}/mnist . 
+$ docker build -t {username}/mnist {path_to_the_image_folder}
 $ docker push {username}/mnist:latest
 ```
 
