@@ -370,7 +370,7 @@ Same as in the previous section, we train the image and export it in the `saved_
 
 ## Preparing applications manifest
 
-When you upload a model, ML Lambda packs it to a Docker image, freezes it, marks it with a version and stores in the Models section. But in order to inference on that model you have to deploy it via end-point applications. To create that application, you have to provied `application.yaml`. 
+When you upload a model, ML Lambda packs it to a Docker image, freezes it, marks it with a version and stores in the Models section. But in order to inference on that model you have to deploy it via end-point applications. To create that application you have to provide `application.yaml`. 
 
 ```yaml
 version: v2-alpha
@@ -396,11 +396,11 @@ singular:
         threshold: 0.1
 ```
 
-This file creates two applications: one with the actual model and one with the concept model. Concept model (`mnist-concept-app`) will be additionally applied on top of actual model (`mnist-app`) as a monitoring service. We will discuss its inference later. 
+This file creates two applications: one with the actual model and one with the concept model. Concept model (`mnist-concept-app`) will be additionally applied on top of actual model (`mnist-app`) as a monitoring service. We will discuss monitoring later. 
 
 ## Integration tests
 
-After deployment step is done, we need to perform integractions tests to ensure, that the model runs properly. Create a `client.py` file, which will send a few images to the deployed model and perform evaluation.
+After deployment step is done, we need to perform integractions test to ensure that the model runs properly. Create a `client.py` file, which will send a few images to the deployed model and perform evaluation.
 
 ```python
 # client.py
@@ -443,7 +443,7 @@ This will print all evaluation statistics in the pod logs.
 
 ## Packing image
 
-The next step will be building the Docker image from the model. This image will be the working image and it will contain all files that will be executed during the workflow steps. As a base image we will use `python:3.6-slim` image. Since this would be a raw Python container, we would also need to install a few python packages inside it. Create a `requirements.txt` file. 
+The next step will be building the Docker image from the model. This image will be the working workflow image and it will contain all files that will be executed during the workflow steps. As a base image we will use `python:3.6-slim` image. Since this would be a raw Python container, we would also need to install a few python packages inside it. Create a `requirements.txt` file. 
 
 ```
 numpy==1.14.3
@@ -467,21 +467,9 @@ After the last step the whole directory should look like this:
 
 ```
 ├── demo
-│   ├── app.yaml
-mnist
-│   ├── components
-│   │   └── ...
-│   ├── environments
-│   │   └── default
-│   │       └── ...
-│   ├── lib
-│   │   └── ...
-│   └── vendor
-│       └── kubeflow
-│           └── ...
-├── model-workflow.yaml
+│   └── ... # ksonnet app
 ├── service-account.yaml
-├── storage.yaml
+├── pvc.yaml
 └── image
     ├── Dockerfile
     ├── application.yaml
@@ -503,7 +491,7 @@ Here we're naming the image with `mnist` name. By default it will be assigned wi
 
 ## Creating workflow 
 
-As we've mentioned abobe, we will define the whole workflow using Argo's workflows. Create a `model-workflow.yaml` and add a basic structure to it.
+As we've mentioned above, we will define the whole workflow using Argo's workflows. Create a `model-workflow.yaml` and add a basic structure to it.
 
 ```yaml 
 # model-workflow.yaml
@@ -526,8 +514,6 @@ spec:
     steps:
     - - name: download-mnist
         template: nil
-      - name: download-not-mnist
-        template: nil
     - - name: train-mnist
         template: nil
       - name: train-mnist-concept
@@ -540,18 +526,18 @@ spec:
         template: nil
 ```
 
-Here we define persistent volumes created above, all workflow steps and some other metadata. Downloading and Training will be done in parallel, while uploading/deploying/testing will be done consequently. 
+We define persistent volumes, all workflow steps and some other metadata. Model training will be done in parallel (for mnist classifier and autoencoder model), while data-loading/model-uploading/model-deploying/model-testing will be done consequently. 
 
-### Download template
+### execute-python template
 
-Let's start with the downloading. We will do that with Kubernetes Jobs. 
+During workflow execution we would need to run different Python scripts including the downloading script. We can abstract this stage to execute any Python script. 
 
 ```yaml
-- name: download
+- name: execute-python
   inputs: 
     parameters:
       - name: file
-      value: download-file
+      value: working-file
   resource:
     action: apply
     successCondition: status.succeeded == 1
@@ -578,13 +564,21 @@ Let's start with the downloading. We will do that with Kubernetes Jobs.
                 value: {{workflow.parameters.mnist-data-dir}}
               - name: notMNIST_DATA_DIR
                 value: {{workflow.parameters.notmnist-data-dir}}
+              - name: HOST_ADDRESS
+                value: {{workflow.parameters.host-address}}
+              - name: APPLICATION_NAME
+                value: {{workflow.parameters.application-name}}
+              - name: SIGNATURE_NAME
+                value: {{workflow.parameters.signature-name}}
+              - name: WARMUP_IMAGES_AMOUNT
+                value: "{{workflow.parameters.warmup-images-amount}}"
               volumes:
               - name: data
                 persistentVolumeClaim:
                   claimName: data
 ```
 
-As a base we use the container that we've built before. We have additionally provided some environment variables which we use in the downloading scripts. Environment variabels are specified via Argo parameters, which can be declared globally or locally. Global parameters are specified in one place and can be reached from everythere in the file, while local parameters are only specific to the declaration template. Using local parameters allows us to use a single template and specify which file we want to run. Let's put it all together. 
+As a base we'll use the container that we've created before. We have additionally provided some environment variables which we use in the downloading scripts. Environment variabels are specified via Argo parameters. They can be declared globally or locally. Global parameters are specified in one place and can be reached from everythere in the file while local parameters are only specific to the declaration template. Using local parameters allows us to use a single template and specify which file we want to run. Let's put it all together. 
 
 ```yaml
 # model-workflow.yaml
@@ -600,6 +594,14 @@ spec:
       value: /data/mnist
     - name: notmnist-data-dir
       value: /data/notmnist
+    - name: host-address
+      value: http://localhost
+    - name: application-name
+      value: mnist-app
+    - name: signature-name
+      value: predict
+    - name: warmup-images-amount
+      value: 1000
   entrypoint: mnist-workflow
   volumes:
     - name: data
@@ -612,17 +614,11 @@ spec:
   - name: mnist-workflow
     steps:
     - - name: download-mnist
-        template: download
+        template: execute-python
         arguments:
           parameters:
             - name: file
               value: download-mnist
-      - name: download-not-mnist
-        template: download
-        arguments:
-          parameters:
-            - name: file
-              value: download-notmnist
     - - name: train-mnist
         template: nil
       - name: train-mnist-concept
@@ -631,13 +627,17 @@ spec:
         template: nil
     - - name: deploy
         template: nil
-    - - name: test
-        template: nil
-  - name: download
+    - - name: integration-test
+        template: execute-python
+        arguments: 
+          parameters:
+            - name: file
+              value: client
+  - name: execute-python
     inputs: 
       parameters:
       - name: file
-        value: download-file
+        value: working-file
     resource:
       action: apply
       successCondition: status.succeeded == 1
@@ -664,13 +664,21 @@ spec:
                   value: {{workflow.parameters.mnist-data-dir}}
                 - name: notMNIST_DATA_DIR
                   value: {{workflow.parameters.notmnist-data-dir}}
+                - name: HOST_ADDRESS
+                  value: {{workflow.parameters.host-address}}
+                - name: APPLICATION_NAME
+                  value: {{workflow.parameters.application-name}}
+                - name: SIGNATURE_NAME
+                  value: {{workflow.parameters.signature-name}}
+                - name: WARMUP_IMAGES_AMOUNT
+                  value: "{{workflow.parameters.warmup-images-amount}}"
               volumes:
               - name: data
                 persistentVolumeClaim:
                   claimName: data
 ```
 
-I will now breafly describe each templates' definition and then join them altogether. The next template is training.
+With this step we've already covered the downloading and the testing stages of our workflow. I will now breafly describe other template definitions and then join them altogether. The next template is training.
 
 ### Training template
 
@@ -688,37 +696,36 @@ I will now breafly describe each templates' definition and then join them altoge
     apiVersion: kubeflow.org/v1alpha2
     kind: TFJob
     metadata:
-        name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
+      name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
     spec:
-        tfReplicaSpecs:
-        Master:
-            replicas: 1
-            template:
-            spec:
-                containers:
-                - name: tensorflow
-                    image: tidylobster/mnist
-                    command: ["python"]
-                    args: ["{{inputs.parameters.file}}.py"]
-                    volumeMounts:
-                    - name: data
-                        mountPath: /data
-                    - name: models
-                        mountPath: /models
-                    env:
-                    - name: MNIST_MODELS_DIR
-                        value: {{workflow.parameters.mnist-models-dir}}
-                    - name: MNIST_DATA_DIR
-                        value: {{workflow.parameters.mnist-data-dir}}
-                    - name: notMNIST_MODELS_DIR
-                        value: {{workflow.parameters.notmnist-models-dir}}
-                    - name: notMNIST_DATA_DIR
-                        value: {{workflow.parameters.notmnist-data-dir}}
-                volumes:
-                - name: data
-                    persistentVolumeClaim:
-                    claimName: data
-                - name: models
-                    persistentVolumeClaim:
-                    claimName: models
+      tfReplicaSpecs:
+      Master:
+        replicas: 1
+        template:
+        spec:
+        containers:
+            - name: tensorflow
+              image: tidylobster/mnist
+              command: ["python"]
+              args: ["{{inputs.parameters.file}}.py"]
+              volumeMounts:
+              - name: data
+                mountPath: /data
+              - name: models
+                mountPath: /models
+              env:
+              - name: MNIST_MODELS_DIR
+                value: {{workflow.parameters.mnist-models-dir}}
+              - name: MNIST_DATA_DIR
+                value: {{workflow.parameters.mnist-data-dir}}
+              volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: data
+              - name: models
+                persistentVolumeClaim:
+                  claimName: models
 ```
+
+Kubeflow allows you to perform distributed Tensorflow training and manages all devices for you. You don't have to create Chief/Master replications or Prameter Server/Worker instances on your own. Since MNIST model is quite simple we allowed ourselves to train it only within one Master replica. 
+
