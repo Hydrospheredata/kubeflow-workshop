@@ -462,6 +462,7 @@ numpy==1.14.3
 Pillow==5.2.0
 tensorflow==1.9.0
 hs==0.1.3
+scikit-learn==0.20.0
 ```
 
 Now we can create a `Dockerfile`.
