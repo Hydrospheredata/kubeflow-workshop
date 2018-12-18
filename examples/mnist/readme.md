@@ -1,6 +1,6 @@
 # Train and deliver ML models to production with a single command
 
-Very often a workflow of training models and delivering them to the production environment contains huge gaps of manual work. Those could be either building a Docker image and deploying it to the Kubernetes cluster or packing the model to the Python package and installing it to your Python application. Or even changing your Java classes with the defined weights and re-compiling the whole project. Not to mention that all of this should be followed by testing your model's performance (which is not just a check of the ability to compile). Can this be interpreted as continuous delivery if you do it by hands? What if you could run the whole process of assembling/training/deploying/testing/running model via single command in your terminal? 
+Very often a workflow of training models and delivering them to the production environment contains huge gaps of manual work. Those could be either building a Docker image and deploying it to the Kubernetes cluster or packing the model to the Python package and installing it to your Python application. Or even changing your Java classes with the defined weights and re-compiling the whole project. Not to mention that all of this should be followed by testing your model's performance (which is not just a check of the ability to compile). Can this be interpreted as continuous delivery if you do it manually? What if you could run the whole process of assembling/training/deploying/testing/running model via single command in your terminal? 
 
 Let me show you how you can build the whole workflow of data gathering / model training / model deployment / model testing within a single file and how you can run it with one single command. 
 
@@ -130,7 +130,7 @@ metadata:
 $ kubectl apply -f service-account.yaml
 ```
 
-Steps above define the whole environment that we need for our needs. Next we will create a simple MNIST classifier. Let's assemble the data. 
+Steps above define the whole environment for our CD tasks. Next we will create a simple MNIST classifier. Let's assemble the data. 
 
 ## Data gathering
 
@@ -217,7 +217,7 @@ As you can see files will be stored either in the directory defined by the `MNIS
 
 ## Building classification model
 
-As the model backend we will use Tensorflow high-level Estimator API.
+For the model backend we will use Tensorflow high-level Estimator API.
 
 ```python
 # mnist-model.py
@@ -270,7 +270,7 @@ Here we define a function `input_fn` that will produce images for our DNN Classi
 
 ## Building concept model
 
-To test that our model actually works on the data which is similar to the training set, we need to capture the essense of the training set. To do that we will additionally train an autoencoder to extract the most important features from the data. The difference between the reconstructed image based on the extracted features and the original image will be our measure of "correctness" of the data. Higher L2-distance indicates that image is less likely to be from the training (or similiar) dataset. 
+To test if our model actually works on the data which is similar to the training set, we need to capture the essense of the training set. To do that we will additionally train an autoencoder to extract the most important features from the data. The difference between the reconstructed image based on the extracted features and the original image will be our measure of "correctness" of the data. Higher L2-distance indicates that image is less likely to be from the training (or similiar) dataset. 
 
 We chose to build this model with lower level Tensorflow API as it offers us more flexibility, but also produces more boilerplate code. 
 
