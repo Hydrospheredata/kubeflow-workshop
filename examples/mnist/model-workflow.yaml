@@ -20,7 +20,7 @@ spec:
     - name: signature-name
       value: predict
     - name: warmup-images-amount
-      value: 1000
+      value: 200
   entrypoint: mnist-workflow
   volumes:
     - name: data
@@ -73,7 +73,7 @@ spec:
         apiVersion: batch/v1
         kind: Job
         metadata: 
-          name: {{inputs.parameters.file}}
+          name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
         spec: 
           template:
             spec:
@@ -117,7 +117,7 @@ spec:
         apiVersion: kubeflow.org/v1alpha2
         kind: TFJob
         metadata:
-          name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
+          name: tf{{workflow.parameters.job-name}}-{{inputs.parameters.file}}
         spec:
           tfReplicaSpecs:
             Master:

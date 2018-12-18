@@ -23,11 +23,15 @@ num_input = 784
 
 # Import MNIST data
 with np.load(os.path.join(base_path, train_file)) as data:
-    imgs, labels = data["imgs"], data["labels"]
+    imgs_data, labels_data = data["imgs"], data["labels"]
+    assert imgs_data.shape[0] == labels_data.shape[0]
 
-dataset = tf.data.Dataset.from_tensor_slices((imgs, labels))
+imgs_placeholder = tf.placeholder(imgs_data.dtype, imgs_data.shape)
+labels_placeholder = tf.placeholder(labels_data.dtype, labels_data.shape)
+
+dataset = tf.data.Dataset.from_tensor_slices((imgs_placeholder, labels_placeholder))
 dataset = dataset.batch(batch_size).repeat()
-iterator = dataset.make_one_shot_iterator()
+iterator = dataset.make_initializable_iterator()
 imgs, labels = iterator.get_next()
 
 
@@ -65,18 +69,21 @@ optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
 
 with tf.Session() as sess:
+    sess.run(iterator.initializer, feed_dict={
+        imgs_placeholder: imgs_data,
+        labels_placeholder: labels_data})
     sess.run(tf.global_variables_initializer())
 
     # Training
     for i in range(1, num_steps+1):
         _, l = sess.run([optimizer, loss])
         if i % display_step == 0 or i == 1:
-            print(f'Step {i}: Minibatch Loss: {np.mean(l)}')
+            print(f'Step {i}: Minibatch Loss: {np.mean(l)}', flush=True)
 
     # Save model
     signature_map = {
         "infer": tf.saved_model.signature_def_utils.predict_signature_def(
-            inputs={"X": imgs}, 
+            inputs={"X": imgs_placeholder}, 
             outputs={"reconstructed": serving})
     }
 

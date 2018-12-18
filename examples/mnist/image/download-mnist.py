@@ -11,7 +11,7 @@ def download_files(base_url, base_dir, files):
     os.makedirs(base_dir, exist_ok=True)
 
     for file in files:
-        print(f"Started downloading {file}")
+        print(f"Started downloading {file}", flush=True)
         download_url = urllib.parse.urljoin(base_url, file)
         download_path = os.path.join(base_dir, file)
         local_file, _ = urllib.request.urlretrieve(download_url, download_path)
@@ -23,7 +23,7 @@ def download_files(base_url, base_dir, files):
 def unpack_file(file, base_dir):
     """ Unpacking all compressed files. """
 
-    print(f"Unpacking {file}")
+    print(f"Unpacking {file}", flush=True)
     if os.path.split(base_dir)[-1] == "mnist":
         with gzip.open(file, 'rb') as f_in, open(file[:-3],'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
@@ -36,7 +36,7 @@ def unpack_file(file, base_dir):
 def preprocess_mnist_files(path, dataset):
     """ Preprocess downloaded MNIST datasets. """
     
-    print(f"Preprocessing {os.path.join(path, dataset)}")
+    print(f"Preprocessing {os.path.join(path, dataset)}", flush=True)
     label_file = os.path.join(path, dataset + '-labels-idx1-ubyte')
     with open(label_file, 'rb') as file:
         _, num = struct.unpack(">II", file.read(8))
