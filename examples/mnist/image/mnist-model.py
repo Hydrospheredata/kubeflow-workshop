@@ -2,8 +2,6 @@ import os
 import tensorflow as tf
 import numpy as np
 
-
-# Training Parameters
 models_path = os.environ.get("MNIST_MODELS_DIR", "models/mnist")
 models_path = os.path.join(models_path, "model")
 base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
@@ -12,8 +10,7 @@ test_file = "t10k.npz"
 
 learning_rate = os.environ.get("LEARNING_RATE", 0.01)
 num_steps = os.environ.get("LEARNING_STEPS", 10000)
-batch_size = os.environ.get("BATCH_SIZE", 246)
-display_step = os.environ.get("DISPLAY_STEPS", 1000)
+batch_size = os.environ.get("BATCH_SIZE", 256)
 
 
 def input_fn(file):
@@ -22,7 +19,6 @@ def input_fn(file):
         labels = data["labels"].astype(int)
     return tf.estimator.inputs.numpy_input_fn(
         x = {"imgs": imgs}, y=labels, shuffle=True)
-
 
 if __name__ == "__main__":
     imgs = tf.feature_column.numeric_column("imgs", shape=(28,28))

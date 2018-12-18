@@ -1,5 +1,5 @@
 import os, sys, time, json
-import logging, requests
+import requests
 import numpy as np
 from sklearn.metrics import accuracy_score
 
@@ -32,7 +32,8 @@ for index, image in enumerate(data):
     try:
         image = [image.tolist()]
         response = requests.post(url=link, json={'imgs': image})
-        print(f"{index+1}/{len(data)} :: predicted class {response.json()['class_ids'][0][0]}", flush=True)
+        print(f"{index+1}/{len(data)} :: predicted class " /
+              f"{response.json()['class_ids'][0][0]}", flush=True)
         predicted.append(response.json()["class_ids"][0][0])
     except Exception as e:
         predicted.append(-1)

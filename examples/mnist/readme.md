@@ -158,7 +158,7 @@ def download_files(base_url, base_dir, files):
     os.makedirs(base_dir, exist_ok=True)
 
     for file in files:
-        print(f"Started downloading {file}")
+        print(f"Started downloading {file}", flush=True)
         download_url = urllib.parse.urljoin(base_url, file)
         download_path = os.path.join(base_dir, file)
         local_file, _ = urllib.request.urlretrieve(download_url, download_path)
@@ -170,7 +170,7 @@ def download_files(base_url, base_dir, files):
 def unpack_file(file, base_dir):
     """ Unpack the compressed file. """
 
-    print(f"Unpacking {file}")
+    print(f"Unpacking {file}", flush=True)
     with gzip.open(file, 'rb') as f_in, open(file[:-3],'wb') as f_out:
         shutil.copyfileobj(f_in, f_out)
     os.remove(file)
@@ -179,7 +179,7 @@ def unpack_file(file, base_dir):
 def preprocess_mnist_files(path, dataset):
     """ Preprocess downloaded MNIST datasets. """
     
-    print(f"Preprocessing {os.path.join(path, dataset)}")
+    print(f"Preprocessing {os.path.join(path, dataset)}", flush=True)
     label_file = os.path.join(path, dataset + '-labels-idx1-ubyte')
     with open(label_file, 'rb') as file:
         _, num = struct.unpack(">II", file.read(8))
@@ -210,7 +210,7 @@ if __name__ == "__main__":
         base_dir=mnist_dir, 
         files=mnist_files)
     preprocess_mnist_files(mnist_dir, "train")
-    preprocess_mnist_files(mnist_dir, "t10k")
+    preprocess_mnist_files(mnist_dir, "t10k")    
 ```
 
 As you can see files will be stored either in the directory defined by the `MNIST_DATA_DIR` environmnet variable, or locally under the `data/mnist` path if `MNIST_DATA_DIR` variable is unset. 
@@ -225,7 +225,6 @@ For the model backend we will use Tensorflow high-level Estimator API.
 import os
 import tensorflow as tf
 import numpy as np
-
 
 models_path = os.environ.get("MNIST_MODELS_DIR", "models/mnist")
 models_path = os.path.join(models_path, "model")
@@ -244,7 +243,6 @@ def input_fn(file):
         labels = data["labels"].astype(int)
     return tf.estimator.inputs.numpy_input_fn(
         x = {"imgs": imgs}, y=labels, shuffle=True)
-
 
 if __name__ == "__main__":
     imgs = tf.feature_column.numeric_column("imgs", shape=(28,28))
@@ -282,7 +280,6 @@ import shutil
 import numpy as np
 import tensorflow as tf
 
-
 learning_rate = os.environ.get("LEARNING_RATE", 0.01)
 num_steps = os.environ.get("LEARNING_STEPS", 10000)
 batch_size = os.environ.get("BATCH_SIZE", 246)
@@ -297,14 +294,17 @@ num_hidden_1 = 256
 num_hidden_2 = 128 
 num_input = 784
 
-
 # Import MNIST data
 with np.load(os.path.join(base_path, train_file)) as data:
-    imgs, labels = data["imgs"], data["labels"]
+    imgs_data, labels_data = data["imgs"], data["labels"]
+    assert imgs_data.shape[0] == labels_data.shape[0]
 
-dataset = tf.data.Dataset.from_tensor_slices((imgs, labels))
+imgs_placeholder = tf.placeholder(imgs_data.dtype, imgs_data.shape)
+labels_placeholder = tf.placeholder(labels_data.dtype, labels_data.shape)
+
+dataset = tf.data.Dataset.from_tensor_slices((imgs_placeholder, labels_placeholder))
 dataset = dataset.batch(batch_size).repeat()
-iterator = dataset.make_one_shot_iterator()
+iterator = dataset.make_initializable_iterator()
 imgs, labels = iterator.get_next()
 
 
@@ -342,18 +342,21 @@ optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
 
 with tf.Session() as sess:
+    sess.run(iterator.initializer, feed_dict={
+        imgs_placeholder: imgs_data,
+        labels_placeholder: labels_data})
     sess.run(tf.global_variables_initializer())
 
     # Training
     for i in range(1, num_steps+1):
         _, l = sess.run([optimizer, loss])
         if i % display_step == 0 or i == 1:
-            print(f'Step {i}: Minibatch Loss: {np.mean(l)}')
+            print(f'Step {i}: Minibatch Loss: {np.mean(l)}', flush=True)
 
     # Save model
     signature_map = {
         "infer": tf.saved_model.signature_def_utils.predict_signature_def(
-            inputs={"X": imgs}, 
+            inputs={"X": imgs_placeholder}, 
             outputs={"reconstructed": serving})
     }
 
@@ -405,10 +408,10 @@ After deployment step is done, we need to perform integractions test to ensure t
 ```python
 # client.py
 
-import os
-import time
+import os, sys, time, json
 import requests
 import numpy as np
+from sklearn.metrics import accuracy_score
 
 host_address = os.environ.get("HOST_ADDRESS", "http://localhost")
 application_name = os.environ.get("APPLICATION_NAME", "mnist-app")
@@ -418,25 +421,37 @@ warmup_images_count = int(os.environ.get("WARMUP_IMAGES_AMOUNT", 100))
 mnist_base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
 test_file = "t10k.npz"
 
-
 # Import MNIST data
 with np.load(os.path.join(mnist_base_path, test_file)) as data:
     imgs, labels = data["imgs"], data["labels"]
-np.random.shuffle(imgs)
-imgs = imgs[:warmup_images_count//2]
+    imgs, labels = imgs[:warmup_images_count], labels[:warmup_images_count]
+    clean_images = len(imgs)
 
-# Generate noise data
-noise = np.random.uniform(size=imgs.shape)
-data = np.concatenate((imgs, imgs+noise))
+noisy_imgs, noisy_labels = np.copy(imgs), np.copy(labels)
+noisy_imgs, noisy_labels = noisy_imgs[:warmup_images_count//2], noisy_labels[:warmup_images_count//2]
+noise = np.random.uniform(size=noisy_imgs.shape)
 
-for image in data:
-    # Warm up application
-    image = [image.tolist()]
-    r = requests.post(
-        url=f"{host_address}/gateway/applications/{application_name}/{signature_name}", 
-        json={'imgs': image})
-    print("predicted class", r.json()["class_ids"])
+data = np.concatenate((imgs, noisy_imgs+noise))
+labels = np.concatenate((labels, noisy_labels))
+
+link = f"{host_address}/gateway/applications/{application_name}/{signature_name}"
+print(f"Using URL :: {link}", flush=True)
+
+predicted = []
+for index, image in enumerate(data):
+    try:
+        image = [image.tolist()]
+        response = requests.post(url=link, json={'imgs': image})
+        print(f"{index+1}/{len(data)} :: predicted class " /
+              f"{response.json()['class_ids'][0][0]}", flush=True)
+        predicted.append(response.json()["class_ids"][0][0])
+    except Exception as e:
+        predicted.append(-1)
+        print(e, flush=True)
+        time.sleep(5)
     time.sleep(0.6)
+
+print(accuracy_score(labels[:clean_images], predicted[:clean_images]), flush=True)
 ```
 
 This will print all evaluation statistics in the pod logs. 

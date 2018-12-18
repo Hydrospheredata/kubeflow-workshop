@@ -3,8 +3,6 @@ import shutil
 import numpy as np
 import tensorflow as tf
 
-
-# Training Parameters
 learning_rate = os.environ.get("LEARNING_RATE", 0.01)
 num_steps = os.environ.get("LEARNING_STEPS", 10000)
 batch_size = os.environ.get("BATCH_SIZE", 246)
@@ -15,11 +13,9 @@ models_path = os.path.join(models_path, "concept")
 base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
 train_file = "train.npz"
 
-# Network Parameters
 num_hidden_1 = 256 
 num_hidden_2 = 128 
 num_input = 784
-
 
 # Import MNIST data
 with np.load(os.path.join(base_path, train_file)) as data:
