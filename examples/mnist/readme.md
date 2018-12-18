@@ -1,4 +1,4 @@
-# Train and deliver ML models to production with a single command
+# Train and deliver machine learning models to production with a single command
 
 Very often a workflow of training models and delivering them to the production environment contains huge gaps of manual work. Those could be either building a Docker image and deploying it to the Kubernetes cluster or packing the model to the Python package and installing it to your Python application. Or even changing your Java classes with the defined weights and re-compiling the whole project. Not to mention that all of this should be followed by testing your model's performance (which is not just a check of the ability to compile). Can this be interpreted as continuous delivery if you do it manually? What if you could run the whole process of assembling/training/deploying/testing/running model via single command in your terminal? 
 
@@ -561,7 +561,7 @@ During workflow execution we would need to run different Python scripts includin
       apiVersion: batch/v1
       kind: Job
       metadata: 
-        name: {{inputs.parameters.file}}
+        name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
       spec: 
         template:
           spec:
@@ -661,7 +661,7 @@ spec:
         apiVersion: batch/v1
         kind: Job
         metadata: 
-          name: {{inputs.parameters.file}}
+          name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
         spec: 
           template:
             spec:
@@ -711,7 +711,7 @@ With this step we've already covered the downloading and the testing stages of o
     apiVersion: kubeflow.org/v1alpha2
     kind: TFJob
     metadata:
-      name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
+      name: tf{{workflow.parameters.job-name}}-{{inputs.parameters.file}}
     spec:
       tfReplicaSpecs:
       Master:
@@ -809,7 +809,7 @@ spec:
     - name: signature-name
       value: predict
     - name: warmup-images-amount
-      value: 1000
+      value: 200
   entrypoint: mnist-workflow
   volumes:
     - name: data
@@ -862,7 +862,7 @@ spec:
         apiVersion: batch/v1
         kind: Job
         metadata: 
-          name: {{inputs.parameters.file}}
+          name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
         spec: 
           template:
             spec:
@@ -906,7 +906,7 @@ spec:
         apiVersion: kubeflow.org/v1alpha2
         kind: TFJob
         metadata:
-          name: {{workflow.parameters.job-name}}-{{inputs.parameters.file}}
+          name: tf{{workflow.parameters.job-name}}-{{inputs.parameters.file}}
         spec:
           tfReplicaSpecs:
             Master:
@@ -961,7 +961,6 @@ spec:
         hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
         hs cluster use {{workflow.parameters.cluster-name}}
         hs apply -f application.yaml
-        
 ```
 
 ## Running workflow 
@@ -973,3 +972,7 @@ $ argo submit model-workflow.yaml \
     --serviceaccount tf-user 
     -p job-name job-name=job-$(uuidgen  | cut -c -5 | tr '[:upper:]' '[:lower:]')
 ```
+
+## Summary
+
+In this article you've created a full continuous delivery workflow for machine learning models. The workflow invloves steps of data gathering, model training and model deployment which wrapped up with integration tests. This allows you to deliver your machine learning models to production by only leveraging a single file hyperparameters. 
