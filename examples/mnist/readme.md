@@ -6,19 +6,16 @@ Let me show you how you can build the whole workflow of data gathering / model t
 
 ## Prerequisites
 
-This tutorial will be done on a Kubernetes single node cluster. You will additionally need: 
+This tutorial assumes that you have an access to a Kubernets clsuter and [initialized Helm Tiller](https://docs.helm.sh/using_helm/#initialize-helm-and-install-tiller) on it. If you don't, you can create your own single node cluster locally with [Minikube](https://kubernetes.io/docs/setup/minikube/). You will also need:
 
-- Docker
-- Helm
-- Kubectl 
-- Ksonnet
-- Argo
+- [Docker](https://docs.docker.com/)
+- [Helm](https://helm.sh/)
+- [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/#install-kubectl) 
+- [Ksonnet](https://ksonnet.io/get-started/)
 
 ## Environment Preparation
 
-Start a cluster and install Helm Tiller on it (`helm init`).
-
-After that create a working directory where will be stored model's files and initialize a ksonnet project inside that directory.
+Create a working directory where will be stored model's files and initialize a ksonnet project inside that directory.
 
 ```sh
 $ mkdir mnist; cd mnist
@@ -975,4 +972,4 @@ $ argo submit model-workflow.yaml \
 
 ## Summary
 
-In this article you've created a full continuous delivery workflow for machine learning models. The workflow invloves steps of data gathering, model training and model deployment which wrapped up with integration tests. This allows you to deliver your machine learning models to production by only leveraging a single file hyperparameters. 
+In this tutorial you've created a full continuous delivery workflow for machine learning models. The workflow invloves steps of data gathering, model training and model deployment which is then followed up by integration tests. This allows you to deliver your machine learning models to production by only leveraging a single file hyperparameters. 
