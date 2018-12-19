@@ -371,6 +371,8 @@ Same as in the previous section, we train the image and export it in the `saved_
 When you upload a model, ML Lambda packs it to a Docker image, freezes it, marks it with a version and stores in the Models section. But in order to inference on that model you have to deploy it via end-point applications. To create that application you have to provide `application.yaml`. 
 
 ```yaml
+# application.yaml 
+
 version: v2-alpha
 kind: Application
 name: mnist-concept-app

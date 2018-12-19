@@ -1,3 +1,5 @@
+# application.yaml 
+
 version: v2-alpha
 kind: Application
 name: mnist-concept-app
