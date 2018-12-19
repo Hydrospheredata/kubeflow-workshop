@@ -1,8 +1,6 @@
 # Train and deliver machine learning models to production with a single command
 
-Very often a workflow of training models and delivering them to the production environment contains huge gaps of manual work. Those could be either building a Docker image and deploying it to the Kubernetes cluster or packing the model to the Python package and installing it to your Python application. Or even changing your Java classes with the defined weights and re-compiling the whole project. Not to mention that all of this should be followed by testing your model's performance (which is not just a check of the ability to compile). Can this be interpreted as continuous delivery if you do it manually? What if you could run the whole process of assembling/training/deploying/testing/running model via single command in your terminal? 
-
-Let me show you how you can build the whole workflow of data gathering / model training / model deployment / model testing within a single file and how you can run it with one single command. 
+Very often a workflow of training models and delivering them to the production environment contains loads of manual work. Those could be either building a Docker image and deploying it to the Kubernetes cluster or packing the model to the Python package and installing it to your Python application. Or even changing your Java classes with the defined weights and re-compiling the whole project. Not to mention that all of this should be followed by testing your model's performance. It hardly could be named "continuous delivery" if you do it all manually. Imagine you could run the whole process of assembling/training/deploying/testing/running model via single command in your terminal.
 
 ## Prerequisites
 
