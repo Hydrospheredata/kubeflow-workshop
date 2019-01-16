@@ -1,10 +1,46 @@
 # Train and deliver machine learning models to production with a single command
 
-Very often a workflow of training models and delivering them to the production environment contains loads of manual work. Those could be either building a Docker image and deploying it to the Kubernetes cluster or packing the model to the Python package and installing it to your Python application. Or even changing your Java classes with the defined weights and re-compiling the whole project. Not to mention that all of this should be followed by testing your model's performance. It hardly could be named "continuous delivery" if you do it all manually. Imagine you could run the whole process of assembling/training/deploying/testing/running model via single command in your terminal.
+Very often a workflow of training models and delivering them to the production environment contains loads of manual work. These could be various steps depending on the type of the model you're using and the workflow you're working within. 
+
+The workflow can be divided into two main parts: data science and "devops". The first part contians all the work related to the model development and model evaluation. To name a few aspects:
+
+- Data collection
+- Data investigation
+- Data cleaning
+- Model building
+- Model evaluation
+
+These have already become fundamental across the field. But what about the "devops"-ish part of job? Can you name a few aspects related to the model delivery onto production? 
+
+The most popular solutions I could've found there is building a Python web server (most commonly on Flask framework) and using it as a base for model inference. The model is typically uploaded via VSC/SSH or delivered as Python package. Sometimes there could be a NGINX server, round-robing each request across multiple Flask servers. If you have enough expertise you can pack the model into container and deploy it to the Kubernetes cluster (or just be content with running it within your Docker engine instance). 
+
+Can you derive the steps that are needed to perform the described above? 
+
+Well, let me try:
+
+- Model preparation
+- Model export
+- Runtime building
+- Model & Runtime packing
+- Versioning 
+- API server building
+- Model deployment 
+- Model integration testing 
+- Performing A/B tests between model versions
+- Replaying predictions on the historical data
+- Model monitoring
+- Data monitoring 
+- Historical data subsampling 
+- Model retraining 
+
+Hmm, I kind of went too far... But let me put this sraight. This field is still in the development (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. Describing each of the steps in the workflow may take us a whole new article(s) and I won't go that far now. 
+
+But my point is - if you have to do this all manually, it can hardly be named "continuous delivery". Imagine, you could've deployed the model just by one command, hiding all of these intermediate steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => deliver => test => infer the model onto production. 
 
 ## Prerequisites
 
-This tutorial assumes that you have an access to a Kubernets clsuter and [initialized Helm Tiller](https://docs.helm.sh/using_helm/#initialize-helm-and-install-tiller) on it. If you don't, you can create your own single node cluster locally with [Minikube](https://kubernetes.io/docs/setup/minikube/). You will also need:
+In this section we will create a predefined infrastructure to work with. 
+This tutorial assumes that you have an access to a Kubernets clsuter and [initialized Helm Tiller](https://docs.helm.sh/using_helm/#initialize-helm-and-install-tiller) on it. If you don't, you can create your own single node cluster locally with Minikube or Kubernetes for Docker. You will also need:
 
 - [Docker](https://docs.docker.com/)
 - [Helm](https://helm.sh/)
@@ -13,14 +49,16 @@ This tutorial assumes that you have an access to a Kubernets clsuter and [initia
 
 ## Environment Preparation
 
-Create a working directory where will be stored model's files and initialize a ksonnet project inside that directory.
+Create a working directory where will be stored model's files. Initialize a ksonnet project inside that directory.
 
 ```sh
 $ mkdir mnist; cd mnist
 $ ks init demo; cd demo
 ```
 
-Now you would need to deploy Argo and Tensorflow operators to the cluster. 
+Now you would need to deploy Kubeflow and Argo to the cluster. 
+- Kubeflow is a Machine Learning tookit for Kubernetes. We will use it for model training. 
+- Argo is a collection of tools, which will let us write workflow pipelines to execute jobs on the Kubernetes cluster. 
 
 ```sh
 $ ks registry add kubeflow github.com/kubeflow/kubeflow/tree/v0.2.5/kubeflow
@@ -34,7 +72,7 @@ $ ks apply default -c kubeflow-argo
 $ cd ..  # cd to the parent `mnist` directory where we'll be working
 ```
 
-Once you've done that, deploy a ML Lambda serving platform.
+Once you've done that, deploy a ML Lambda serving platform. This is essentially a service that will manage and run your models. 
 
 ```sh
 $ helm repo add hydro-serving https://hydrospheredata.github.io/hydro-serving-helm/
@@ -125,7 +163,7 @@ metadata:
 $ kubectl apply -f service-account.yaml
 ```
 
-Steps above define the whole environment for our CD tasks. Next we will create a simple MNIST classifier. Let's assemble the data. 
+Next we will create a simple MNIST classifier. Let's assemble the data. 
 
 ## Data gathering
 
@@ -135,7 +173,7 @@ Create directory `image`. This directory will hold all files of our model. (Thin
 $ mkdir image; cd image
 ```
 
-MNIST dataset is located under the http://yann.lecun.com/exdb/mnist/ address in the binary format. We will download that data, process it into a numpy array and store it on the mounted path. 
+MNIST dataset is located under the http://yann.lecun.com/exdb/mnist/ address in the binary format. We will download the data, process it into a numpy array and store under the mounted path. 
 
 ```python
 # domnload-mnist.py
@@ -212,7 +250,7 @@ As you can see files will be stored either in the directory defined by the `MNIS
 
 ## Building classification model
 
-For the model backend we will use Tensorflow high-level Estimator API.
+For the model backend we will use a Tensorflow high-level Estimator API.
 
 ```python
 # mnist-model.py
@@ -261,114 +299,9 @@ if __name__ == "__main__":
 
 Here we define a function `input_fn` that will produce images for our DNN Classifier. The network itself consists of 2 fully-connected hidden layers with 256 and 64 units respectively. As an activation function we use the default ReLU activation. As an optimizer we chose Adam with the learning rate that is configurable from the outside (via environment variable). After the training the model is stored in `saved_model` format under the specified path. We store both the graph and the weights. 
 
-## Building concept model
-
-To test if our model actually works on the data which is similar to the training set, we need to capture the essense of the training set. To do that we will additionally train an autoencoder to extract the most important features from the data. The difference between the reconstructed image based on the extracted features and the original image will be our measure of "correctness" of the data. Higher L2-distance indicates that image is less likely to be from the training (or similiar) dataset. 
-
-We chose to build this model with lower level Tensorflow API as it offers us more flexibility, but also produces more boilerplate code. 
-
-```python
-# mnist-concept.py
-
-import os
-import shutil
-import numpy as np
-import tensorflow as tf
-
-learning_rate = os.environ.get("LEARNING_RATE", 0.01)
-num_steps = os.environ.get("LEARNING_STEPS", 10000)
-batch_size = os.environ.get("BATCH_SIZE", 246)
-display_step = os.environ.get("DISPLAY_STEPS", 1000)
-
-models_path = os.environ.get("MNIST_MODELS_DIR", "models/mnist")
-models_path = os.path.join(models_path, "concept")
-base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
-train_file = "train.npz"
-
-num_hidden_1 = 256 
-num_hidden_2 = 128 
-num_input = 784
-
-# Import MNIST data
-with np.load(os.path.join(base_path, train_file)) as data:
-    imgs_data, labels_data = data["imgs"], data["labels"]
-    assert imgs_data.shape[0] == labels_data.shape[0]
-
-imgs_placeholder = tf.placeholder(imgs_data.dtype, imgs_data.shape)
-labels_placeholder = tf.placeholder(labels_data.dtype, labels_data.shape)
-
-dataset = tf.data.Dataset.from_tensor_slices((imgs_placeholder, labels_placeholder))
-dataset = dataset.batch(batch_size).repeat()
-iterator = dataset.make_initializable_iterator()
-imgs, labels = iterator.get_next()
-
-
-weights = {
-    'encoder_h1': tf.Variable(tf.random_normal([num_input, num_hidden_1])),
-    'encoder_h2': tf.Variable(tf.random_normal([num_hidden_1, num_hidden_2])),
-    'decoder_h1': tf.Variable(tf.random_normal([num_hidden_2, num_hidden_1])),
-    'decoder_h2': tf.Variable(tf.random_normal([num_hidden_1, num_input])),
-}
-biases = {
-    'encoder_b1': tf.Variable(tf.random_normal([num_hidden_1])),
-    'encoder_b2': tf.Variable(tf.random_normal([num_hidden_2])),
-    'decoder_b1': tf.Variable(tf.random_normal([num_hidden_1])),
-    'decoder_b2': tf.Variable(tf.random_normal([num_input])),
-}
-
-def encoder(x):
-    layer_1 = tf.nn.sigmoid(tf.add(tf.matmul(x, weights['encoder_h1']), biases['encoder_b1']))
-    layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, weights['encoder_h2']), biases['encoder_b2']))
-    return layer_2
-
-def decoder(x):
-    layer_1 = tf.nn.sigmoid(tf.add(tf.matmul(x, weights['decoder_h1']), biases['decoder_b1']))
-    layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, weights['decoder_h2']), biases['decoder_b2']))
-    return layer_2
-
-imgs_flattened = tf.layers.flatten(imgs)
-encoder_op = encoder(imgs_flattened)
-decoder_op = decoder(encoder_op)
-
-y_pred, y_true = decoder_op, imgs_flattened
-loss = tf.reduce_mean(tf.pow(y_true - y_pred, 2), axis=-1)
-serving = tf.expand_dims(loss, 0)
-optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss)
-
-
-with tf.Session() as sess:
-    sess.run(iterator.initializer, feed_dict={
-        imgs_placeholder: imgs_data,
-        labels_placeholder: labels_data})
-    sess.run(tf.global_variables_initializer())
-
-    # Training
-    for i in range(1, num_steps+1):
-        _, l = sess.run([optimizer, loss])
-        if i % display_step == 0 or i == 1:
-            print(f'Step {i}: Minibatch Loss: {np.mean(l)}', flush=True)
-
-    # Save model
-    signature_map = {
-        "infer": tf.saved_model.signature_def_utils.predict_signature_def(
-            inputs={"X": imgs_placeholder}, 
-            outputs={"reconstructed": serving})
-    }
-
-    shutil.rmtree(models_path, ignore_errors=True)
-    builder = tf.saved_model.builder.SavedModelBuilder(models_path)
-    builder.add_meta_graph_and_variables(
-        sess=sess, 
-        tags=[tf.saved_model.tag_constants.SERVING],
-        signature_def_map=signature_map)
-    builder.save()
-```
-
-Same as in the previous section, we train the image and export it in the `saved_model` format. 
-
 ## Preparing applications manifest
 
-When you upload a model, ML Lambda packs it to a Docker image, freezes it, marks it with a version and stores in the Models section. But in order to inference on that model you have to deploy it via end-point applications. To create that application you have to provide `application.yaml`. 
+During the model upload ML Lambda packs the model into Docker image, assigns it with a version and uploads the serving instance. But in order to inference on that model you would have to deploy it via endpoint applications. There're two ways of doing that, but here we will do this with CLI. Create an `application.yaml`. 
 
 ```yaml
 # application.yaml 
@@ -379,28 +312,13 @@ name: mnist-concept-app
 singular:
   model: mnist-concept:1
   runtime: hydrosphere/serving-runtime-tensorflow:1.7.0-latest
----
-version: v2-alpha
-kind: Application
-name: mnist-app
-singular:
-  model: mnist:1
-  runtime: hydrosphere/serving-runtime-tensorflow:1.7.0-latest
-  monitoring:
-    - name: autoencoder
-      input: imgs
-      type: Autoencoder
-      app: mnist-concept-app
-      healthcheck:
-        enabled: true
-        threshold: 0.1
 ```
 
-This file creates two applications: one with the actual model and one with the concept model. Concept model (`mnist-concept-app`) will be additionally applied on top of actual model (`mnist-app`) as a monitoring service. We will discuss monitoring later. 
+This will create an application, that will use the uploaded model version as a base. 
 
 ## Integration tests
 
-After deployment step is done, we need to perform integractions test to ensure that the model runs properly. Create a `client.py` file, which will send a few images to the deployed model and perform evaluation.
+After deployment step is done, we need to perform integraction tests to ensure that the model runs properly. Create a `client.py` file, which will send a few images to the deployed model and perform evaluation.
 
 ```python
 # client.py
@@ -434,6 +352,7 @@ labels = np.concatenate((labels, noisy_labels))
 link = f"{host_address}/gateway/applications/{application_name}/{signature_name}"
 print(f"Using URL :: {link}", flush=True)
 
+# Perform Predictions
 predicted = []
 for index, image in enumerate(data):
     try:
