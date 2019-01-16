@@ -167,7 +167,7 @@ Next we will create a simple MNIST classifier. Let's assemble the data.
 
 ## Data gathering
 
-Create directory `image`. This directory will hold all files of our model. (Think of it as of Docker image, not the actual digit picture).
+Create directory `image`. This directory will be the base for the working Docker image, responsible for training/exporting/testing steps.
 
 ```sh
 $ mkdir image; cd image
@@ -374,7 +374,7 @@ This will print all evaluation statistics in the pod logs.
 
 ## Packing image
 
-The next step will be building the Docker image from the model. This image will be the working workflow image and it will contain all files that will be executed during the workflow steps. As a base image we will use `python:3.6-slim` image. Since this would be a raw Python container, we would also need to install a few python packages inside it. Create a `requirements.txt` file. 
+The next step will be building the Docker image. As a base image we will use `python:3.6-slim` image. Since this would be a raw Python container, we would also need to install a few python packages inside it. Create a `requirements.txt` file. 
 
 ```
 numpy==1.14.3
@@ -407,7 +407,6 @@ After the last step the whole directory should look like this:
     ├── application.yaml
     ├── client.py
     ├── download-mnist.py
-    ├── mnist-concept.py
     ├── mnist-model.py
     └── requirements.txt
 ```
@@ -423,7 +422,7 @@ Here we're naming the image with `mnist` name. By default it will be assigned wi
 
 ## Creating workflow 
 
-As we've mentioned above, we will define the whole workflow using Argo's workflows. Create a `model-workflow.yaml` and add a basic structure to it.
+As we've mentioned above, we will define pipeline's steps using Argo's workflows. Create a `model-workflow.yaml` and add a basic structure to it.
 
 ```yaml 
 # model-workflow.yaml
@@ -448,8 +447,6 @@ spec:
         template: nil
     - - name: train-mnist
         template: nil
-      - name: train-mnist-concept
-        template: nil
     - - name: upload
         template: nil
     - - name: deploy
@@ -458,9 +455,9 @@ spec:
         template: nil
 ```
 
-We define persistent volumes, all workflow steps and some other metadata. Model training will be done in parallel (for mnist classifier and autoencoder model), while data-loading/model-uploading/model-deploying/model-testing will be done consequently. 
+We define persistent volumes, all workflow steps and some other metadata. All the steps will be executed consequently. 
 
-### execute-python template
+### `execute-python` template
 
 During workflow execution we would need to run different Python scripts including the downloading script. We can abstract this stage to execute any Python script. 
 
@@ -510,7 +507,7 @@ During workflow execution we would need to run different Python scripts includin
                   claimName: data
 ```
 
-As a base we'll use the container that we've created before. We have additionally provided some environment variables which we use in the downloading scripts. Environment variabels are specified via Argo parameters. They can be declared globally or locally. Global parameters are specified in one place and can be reached from everythere in the file while local parameters are only specific to the declaration template. Using local parameters allows us to use a single template and specify which file we want to run. Let's put it all together. 
+As a base will be used the created above Docker image. We have additionally provided some environment variables which we use in the downloading scripts. Environment variabels are specified via Argo parameters. They can be declared globally or locally. Global parameters are specified in one place and can be reached from everythere in the file while local parameters are only specific to the declaration template. Using local parameters allows us to use a single template and specify which file we want to run. Let's put it all together. 
 
 ```yaml
 # model-workflow.yaml
@@ -552,8 +549,6 @@ spec:
             - name: file
               value: download-mnist
     - - name: train-mnist
-        template: nil
-      - name: train-mnist-concept
         template: nil
     - - name: upload
         template: nil
@@ -610,7 +605,7 @@ spec:
                   claimName: data
 ```
 
-With this step we've already covered the downloading and the testing stages of our workflow. I will now breafly describe other template definitions and then join them altogether. The next template is training.
+With this step we've already covered the downloading and the testing stages of our workflow. I will now breafly describe other templates' definitions and then join them altogether. The next template is training.
 
 ### Training template
 
@@ -659,7 +654,7 @@ With this step we've already covered the downloading and the testing stages of o
                   claimName: models
 ```
 
-Kubeflow allows you to perform distributed Tensorflow training and manages all devices for you. You don't have to create Chief/Master replications or Prameter Server/Worker instances on your own. Since MNIST model is quite simple we allowed ourselves to train it only within one Master replica. 
+Kubeflow allows you to perform distributed Tensorflow training and manages all devices for you. You don't have to create Chief/Master replications or Parameter Server/Worker instances on your own. Since MNIST model is quite simple we allowed ourselves to train it only within one Master replica. 
 
 ### Uploading template
 
@@ -672,9 +667,6 @@ Kubeflow allows you to perform distributed Tensorflow training and manages all d
       hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
       hs cluster use {{workflow.parameters.cluster-name}}
 
-      cd {{workflow.parameters.mnist-models-dir}}/concept
-      hs upload --name {{workflow.parameters.model-name}}-concept
-
       cd {{workflow.parameters.mnist-models-dir}}/model
       export CD_LATEST_ESTIMATOR_MODEL="cd $(ls -t | head -n1)"
       ${CD_LATEST_ESTIMATOR_MODEL}
@@ -684,7 +676,7 @@ Kubeflow allows you to perform distributed Tensorflow training and manages all d
       mountPath: /models
 ```
 
-In this step we create a working `hs cluster` and provide the address, where the ML Lambda is running. After that we just upload 2 trained models. 
+In this step we create a working `hs cluster` and provide the address, where the ML Lambda is running. After that the trained model is uploaded.
 
 ### Deployment template
 
@@ -699,7 +691,7 @@ In this step we create a working `hs cluster` and provide the address, where the
       hs apply -f application.yaml
 ```
 
-In this step we create from uploaded models end-point applications, defined in our `application.yaml`. 
+In this step we create from the uploaded model an endpoint application, defined in the `application.yaml`. 
 
 The overall workflow should look like the following: 
 
@@ -750,12 +742,6 @@ spec:
           parameters:
             - name: file
               value: mnist-model
-      - name: train-mnist-concept-drift
-        template: train
-        arguments:
-          parameters:
-            - name: file
-              value: mnist-concept
     - - name: upload
         template: upload-models
     - - name: deploy
@@ -859,9 +845,6 @@ spec:
       source: |
         hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
         hs cluster use {{workflow.parameters.cluster-name}}
-
-        cd {{workflow.parameters.mnist-models-dir}}/concept
-        hs upload --name {{workflow.parameters.model-name}}-concept
 
         cd {{workflow.parameters.mnist-models-dir}}/model
         export CD_LATEST_ESTIMATOR_MODEL="cd $(ls -t | head -n1)"
