@@ -2,7 +2,7 @@
 
 Very often a workflow of training models and delivering them to the production environment contains loads of manual work. These could be various steps depending on the type of the model you're using and the workflow you're working within. 
 
-The workflow can be divided into two main parts: data science and "devops". The first part contians all the work related to the model development and model evaluation. To name a few aspects:
+The workflow can be divided into two main parts: data science and "devops". The first part contains all the work related to the model development and model evaluation. To name a few aspects:
 
 - Data collection
 - Data investigation
@@ -33,14 +33,14 @@ Well, let me try:
 - Historical data subsampling 
 - Model retraining 
 
-Hmm, I kind of went too far... But let me put this sraight. This field is still in the development (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. Describing each of the steps in the workflow may take us a whole new article(s) and I won't go that far now. 
+Hmm, I kind of went too far... But let me put this straight. This field is still in the development (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. Describing each of the steps in the workflow may take us a whole new article(s) and I won't go that far now. 
 
 But my point is - if you have to do this all manually, it can hardly be named "continuous delivery". Imagine, you could've deployed the model just by one command, hiding all of these intermediate steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => deliver => test => infer the model onto production. 
 
 ## Prerequisites
 
 In this section we will create a predefined infrastructure to work with. 
-This tutorial assumes that you have an access to a Kubernets clsuter and [initialized Helm Tiller](https://docs.helm.sh/using_helm/#initialize-helm-and-install-tiller) on it. If you don't, you can create your own single node cluster locally with Minikube or Kubernetes for Docker. You will also need:
+This tutorial assumes that you have an access to a Kubernetes cluster and [initialized Helm Tiller](https://docs.helm.sh/using_helm/#initialize-helm-and-install-tiller) on it. If you don't, you can create your own single node cluster locally with Minikube or Kubernetes for Docker. You will also need:
 
 - [Docker](https://docs.docker.com/)
 - [Helm](https://helm.sh/)
@@ -57,7 +57,7 @@ $ ks init demo; cd demo
 ```
 
 Now you would need to deploy Kubeflow and Argo to the cluster. 
-- Kubeflow is a Machine Learning tookit for Kubernetes. We will use it for model training. 
+- Kubeflow is a Machine Learning toolkit for Kubernetes. We will use it for model training. 
 - Argo is a collection of tools, which will let us write workflow pipelines to execute jobs on the Kubernetes cluster. 
 
 ```sh
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     preprocess_mnist_files(mnist_dir, "t10k")    
 ```
 
-As you can see files will be stored either in the directory defined by the `MNIST_DATA_DIR` environmnet variable, or locally under the `data/mnist` path if `MNIST_DATA_DIR` variable is unset. 
+As you can see files will be stored either in the directory defined by the `MNIST_DATA_DIR` environment variable, or locally under the `data/mnist` path if `MNIST_DATA_DIR` variable is unset. 
 
 ## Building classification model
 
@@ -301,7 +301,7 @@ Here we define a function `input_fn` that will produce images for our DNN Classi
 
 ## Preparing applications manifest
 
-During the model upload ML Lambda packs the model into Docker image, assigns it with a version and uploads the serving instance. But in order to inference on that model you would have to deploy it via endpoint applications. There're two ways of doing that, but here we will do this with CLI. Create an `application.yaml`. 
+During the model upload ML Lambda packs the model into Docker image, assigns it with a version and uploads the serving instance. But in order to inference on that model you would have to deploy it via endpoint applications. There are two ways of doing that, but here we will do this with CLI. Create an `application.yaml`. 
 
 ```yaml
 # application.yaml 
@@ -318,7 +318,7 @@ This will create an application, that will use the uploaded model version as a b
 
 ## Integration tests
 
-After deployment step is done, we need to perform integraction tests to ensure that the model runs properly. Create a `client.py` file, which will send a few images to the deployed model and perform evaluation.
+After deployment step is done, we need to perform integration tests to ensure that the model runs properly. Create a `client.py` file, which will send a few images to the deployed model and perform evaluation.
 
 ```python
 # client.py
@@ -411,7 +411,7 @@ After the last step the whole directory should look like this:
     └── requirements.txt
 ```
 
-Build an image and publish it in your public/private Docker registry. In the simpliest case it might be your personal [Docker Hub](https://hub.docker.com/) account. 
+Build an image and publish it in your public/private Docker registry. In the simplest case it might be your personal [Docker Hub](https://hub.docker.com/) account. 
 
 ```sh
 $ docker build -t {username}/mnist {path_to_the_image_folder}
@@ -507,7 +507,7 @@ During workflow execution we would need to run different Python scripts includin
                   claimName: data
 ```
 
-As a base will be used the created above Docker image. We have additionally provided some environment variables which we use in the downloading scripts. Environment variabels are specified via Argo parameters. They can be declared globally or locally. Global parameters are specified in one place and can be reached from everythere in the file while local parameters are only specific to the declaration template. Using local parameters allows us to use a single template and specify which file we want to run. Let's put it all together. 
+As a base will be used the created above Docker image. We have additionally provided some environment variables which we use in the downloading scripts. Environment variables are specified via Argo parameters. They can be declared globally or locally. Global parameters are specified in one place and can be reached from everywhere in the file while local parameters are only specific to the declaration template. Using local parameters allows us to use a single template and specify which file we want to run. Let's put it all together. 
 
 ```yaml
 # model-workflow.yaml
@@ -605,7 +605,7 @@ spec:
                   claimName: data
 ```
 
-With this step we've already covered the downloading and the testing stages of our workflow. I will now breafly describe other templates' definitions and then join them altogether. The next template is training.
+With this step we've already covered the downloading and the testing stages of our workflow. I will now briefly describe other templates' definitions and then join them altogether. The next template is training.
 
 ### Training template
 
@@ -875,4 +875,4 @@ $ argo submit model-workflow.yaml \
 
 ## Summary
 
-In this tutorial you've created a full continuous delivery workflow for machine learning models. The workflow invloves steps of data gathering, model training and model deployment which is then followed up by integration tests. This allows you to deliver your machine learning models to production by only leveraging a single file hyperparameters. 
+In this tutorial you've created a full continuous delivery workflow for machine learning models. The workflow involves steps of data gathering, model training and model deployment which is then followed up by integration tests. This allows you to deliver your machine learning models to production by only leveraging a single file hyperparameters. 
