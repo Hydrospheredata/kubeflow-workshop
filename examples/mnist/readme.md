@@ -14,7 +14,7 @@ The workflow can be divided into two main parts: one related to the data science
 
 These have already become fundamental across the field. But what about the "devops"-ish part? Can you name aspects related to the model delivery to production? 
 
-The most popular solutions I could've found there is building a Python web server (most commonly on Flask framework) and using it as a base for model inference. The model is typically uploaded via VSC/SSH or delivered as Python package. Sometimes there could be a NGINX server, load balancing each request across multiple Flask servers. The most recent recipies include packing the model to container and deploying it to the Kubernetes cluster (or running it just on the Docker engine instance). 
+The most popular solutions I could've found there is building a Python web server (most commonly on Flask framework) and using it as a base for model inference. The model is typically uploaded via VSC/SSH or delivered as Python package. Sometimes there could be a NGINX server, load balancing each request across multiple Flask servers. The most recent recipes include packing the model to container and deploying it to the Kubernetes cluster (or running it just on the Docker engine instance). 
 
 Can you derive the steps that are needed to perform the described above? 
 
@@ -32,11 +32,11 @@ Well, let me try:
 - Replaying model versions on the historical data
 - Production data subsampling 
 
-Hmm, I kind of went too far... But let me put this straight. This field is still in the development stage (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. 
+Hmm, I kind of went too far... But let me put this straight. This field is still in the development stage (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. Describing each of the steps in the workflow may take us a whole new article(s).
 
 ![Image](workflow.png)
 
-Describing each of the steps in the workflow may take us a whole new article(s). Are you doing the blue circles manualy? Is it really a "continuous delivery"? Imagine, you could've deployed the model just by one command, hiding all of these intermediate blue steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => export => deploy => test => infer the model to production enironment. Let's dive in. 
+Are you doing the blue circles manually? If so, is it really a "continuous delivery"? Imagine, you could've deployed the model just by one command, hiding all of these intermediate blue steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => export => deploy => test => infer the model into the production environment. Let's dive in. 
 
 ## Prerequisites
 
@@ -340,7 +340,7 @@ test_file = "t10k.npz"
 # Import MNIST data
 with np.load(os.path.join(mnist_base_path, test_file)) as data:
     imgs, labels = data["imgs"], data["labels"]
-    imgs, labels = imgs[:warmup_images_count], labels[:warmup_images_count]
+    imgs, labels = imgs[:warmup_images_count//2], labels[:warmup_images_count//2]
     clean_images = len(imgs)
 
 noisy_imgs, noisy_labels = np.copy(imgs), np.copy(labels)
@@ -359,7 +359,7 @@ for index, image in enumerate(data):
     try:
         image = [image.tolist()]
         response = requests.post(url=link, json={'imgs': image})
-        print(f"{index+1}/{len(data)} :: predicted class " /
+        print(f"{index+1}/{len(data)} :: predicted class " \
               f"{response.json()['class_ids'][0][0]}", flush=True)
         predicted.append(response.json()["class_ids"][0][0])
     except Exception as e:
@@ -381,7 +381,7 @@ The next step will be building the Docker image. As a base image we will use `py
 numpy==1.14.3
 Pillow==5.2.0
 tensorflow==1.9.0
-hs==0.1.3
+hs==0.1.4
 scikit-learn==0.20.0
 ```
 
@@ -525,13 +525,13 @@ spec:
     - name: mnist-model-dir
       value: /models/mnist
     - name: host-address
-      value: http://localhost
+      value: http://hydro-serving-sidecar-serving.default.svc.cluster.local:8080
     - name: application-name
       value: mnist-app
     - name: signature-name
       value: predict
     - name: warmup-images-amount
-      value: 1000
+      value: 200
   entrypoint: mnist-workflow
   volumes:
     - name: data
@@ -713,7 +713,7 @@ spec:
     - name: model-name
       value: mnist
     - name: host-address
-      value: http://localhost
+      value: http://hydro-serving-sidecar-serving.default.svc.cluster.local:8080
     - name: application-name
       value: mnist-app
     - name: signature-name
@@ -880,11 +880,11 @@ After executing this command argo will start a new workflow. You can open dashbo
 $ kubectl port-forward deployment/argo-ui 8001:8001
 ```
 
-Now argo UI will be available under http://localhost:8001 address. You can check, how your worlflow executes. 
+Now argo UI will be available under http://localhost:8001 address. You can check, how your worklflow executes. 
 
 ![](argo.png)
 
 
-## Summary
+## Conclusion
 
-In this tutorial you've created a full continuous delivery workflow for machine learning models. The workflow involves steps of data gathering, model training and model deployment which is then followed up by integration tests. This allows you to deliver your machine learning models to production by only leveraging a single file hyperparameters. 
+Configuring ML pipelines is challenging most of the times, but once it's done properly it will save a lot of time and emotional expression. In this tutorial we were able to create an infrastructure a data science team can use in the everyday work without bothering much devops engineers. 
