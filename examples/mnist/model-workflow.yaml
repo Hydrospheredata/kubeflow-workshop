@@ -12,11 +12,12 @@ spec:
     - name: cluster-name
       value: local
     - name: model-name
-      value: mnist
+      value: mnist-test
     - name: host-address
+      # value: http://hydro-serving-sidecar-serving.default.svc.cluster.local:8080
       value: https://dev.k8s.hydrosphere.io
     - name: application-name
-      value: mnist-app
+      value: mnist-app-test
     - name: signature-name
       value: predict
     - name: warmup-images-amount
@@ -44,12 +45,6 @@ spec:
           parameters:
             - name: file
               value: mnist-model
-      - name: train-mnist-concept-drift
-        template: train
-        arguments:
-          parameters:
-            - name: file
-              value: mnist-concept
     - - name: upload
         template: upload-models
     - - name: deploy
@@ -80,7 +75,7 @@ spec:
               restartPolicy: Never
               containers:
               - name: main
-                image: tidylobster/mnist
+                image: tidylobster/mnist:latest
                 imagePullPolicy: Always
                 command: ["python"]
                 args: ["{{inputs.parameters.file}}.py"]
@@ -126,7 +121,8 @@ spec:
                 spec:
                   containers:
                     - name: tensorflow
-                      image: tidylobster/mnist
+                      image: tidylobster/mnist:latest
+                      imagePullPolicy: Always
                       command: ["python"]
                       args: ["{{inputs.parameters.file}}.py"]
                       volumeMounts:
@@ -148,14 +144,12 @@ spec:
                         claimName: models
   - name: upload-models
     script: 
-      image: tidylobster/mnist
+      image: tidylobster/mnist:latest
+      imagePullPolicy: Always
       command: ["bash"]
       source: |
         hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}
         hs cluster use {{workflow.parameters.cluster-name}}
-
-        cd {{workflow.parameters.mnist-models-dir}}/concept
-        hs upload --name {{workflow.parameters.model-name}}-concept
 
         cd {{workflow.parameters.mnist-models-dir}}/model
         export CD_LATEST_ESTIMATOR_MODEL="cd $(ls -t | head -n1)"
@@ -166,7 +160,8 @@ spec:
         mountPath: /models
   - name: deploy-applications
     script:
-      image: tidylobster/mnist
+      image: tidylobster/mnist:latest
+      imagePullPolicy: Always
       command: ["bash"]
       source: |
         hs cluster add --name {{workflow.parameters.cluster-name}} --server {{workflow.parameters.host-address}}

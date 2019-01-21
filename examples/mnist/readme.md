@@ -870,9 +870,20 @@ The single command line is this:
 
 ```sh
 $ argo submit model-workflow.yaml \
-    --serviceaccount tf-user 
-    -p job-name job-name=job-$(uuidgen  | cut -c -5 | tr '[:upper:]' '[:lower:]')
+    --serviceaccount tf-user \
+    -p job-name=job-$(uuidgen  | cut -c -5 | tr '[:upper:]' '[:lower:]')
 ```
+
+After executing this command argo will start a new workflow. You can open dashboard to see live changes.
+
+```
+$ kubectl port-forward deployment/argo-ui 8001:8001
+```
+
+Now argo UI will be available under http://localhost:8001 address. You can check, how your worlflow executes. 
+
+![](argo.png)
+
 
 ## Summary
 

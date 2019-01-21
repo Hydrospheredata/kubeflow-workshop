@@ -1,23 +1,7 @@
 # application.yaml 
 
-version: v2-alpha
 kind: Application
-name: mnist-concept-app
+name: mnist-app-test
 singular:
-  model: mnist-concept:1
+  model: mnist-test:1
   runtime: hydrosphere/serving-runtime-tensorflow:1.7.0-latest
----
-version: v2-alpha
-kind: Application
-name: mnist-app
-singular:
-  model: mnist:1
-  runtime: hydrosphere/serving-runtime-tensorflow:1.7.0-latest
-  monitoring:
-    - name: autoencoder
-      input: imgs
-      type: Autoencoder
-      app: mnist-concept-app
-      healthcheck:
-        enabled: true
-        threshold: 0.1
