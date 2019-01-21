@@ -4,9 +4,7 @@ Very often a workflow of training models and delivering them to the production e
 
 The workflow can be divided into two main parts: data science and "devops". The first part contains all the work related to the model development and model evaluation. To name a few aspects:
 
-- Data collection
-- Data investigation
-- Data cleaning
+- Subject area research
 - Model building
 - Model evaluation
 
@@ -18,14 +16,12 @@ Can you derive the steps that are needed to perform the described above?
 
 Well, let me try:
 
-- Model preparation
 - Model export
-- Runtime building
-- Model & Runtime packing
-- Versioning 
-- API server building
+- Runtime preparation
+- Model & Runtime packaging
+- Model versioning 
 - Model deployment 
-- Model integration testing 
+- Integration tests 
 - Performing A/B tests between model versions
 - Replaying predictions on the historical data
 - Model monitoring
@@ -34,6 +30,8 @@ Well, let me try:
 - Model retraining 
 
 Hmm, I kind of went too far... But let me put this straight. This field is still in the development (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. Describing each of the steps in the workflow may take us a whole new article(s) and I won't go that far now. 
+
+![Image](workflow.png)
 
 But my point is - if you have to do this all manually, it can hardly be named "continuous delivery". Imagine, you could've deployed the model just by one command, hiding all of these intermediate steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => deliver => test => infer the model onto production. 
 
@@ -607,7 +605,7 @@ spec:
 
 With this step we've already covered the downloading and the testing stages of our workflow. I will now briefly describe other templates' definitions and then join them altogether. The next template is training.
 
-### Training template
+### `train` template
 
 ```yaml
 - name: train
@@ -656,7 +654,7 @@ With this step we've already covered the downloading and the testing stages of o
 
 Kubeflow allows you to perform distributed Tensorflow training and manages all devices for you. You don't have to create Chief/Master replications or Parameter Server/Worker instances on your own. Since MNIST model is quite simple we allowed ourselves to train it only within one Master replica. 
 
-### Uploading template
+### `upload-models` template
 
 ```yaml
 - name: upload-models
