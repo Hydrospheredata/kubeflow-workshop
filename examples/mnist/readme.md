@@ -2,38 +2,41 @@
 
 Very often a workflow of training models and delivering them to the production environment contains loads of manual work. These could be various steps depending on the type of the model you're using and the workflow you're working within. 
 
-The workflow can be divided into two main parts: data science and "devops". The first part contains all the work related to the model development and model evaluation. To name a few aspects:
+The workflow can be divided into two main parts: one related to the data science, and one related to the devops. The first one contains all the work related to the model development and model evaluation. To name a few aspects:
 
-- Subject area research
+- Research in subject area
+    - Data collection
+    - Data cleaning
+    - Data analysis
 - Model building
 - Model evaluation
+- Model export
 
-These have already become fundamental across the field. But what about the "devops"-ish part of job? Can you name a few aspects related to the model delivery onto production? 
+These have already become fundamental across the field. But what about the "devops"-ish part? Can you name aspects related to the model delivery to production? 
 
-The most popular solutions I could've found there is building a Python web server (most commonly on Flask framework) and using it as a base for model inference. The model is typically uploaded via VSC/SSH or delivered as Python package. Sometimes there could be a NGINX server, round-robing each request across multiple Flask servers. If you have enough expertise you can pack the model into container and deploy it to the Kubernetes cluster (or just be content with running it within your Docker engine instance). 
+The most popular solutions I could've found there is building a Python web server (most commonly on Flask framework) and using it as a base for model inference. The model is typically uploaded via VSC/SSH or delivered as Python package. Sometimes there could be a NGINX server, load balancing each request across multiple Flask servers. The most recent recipies include packing the model to container and deploying it to the Kubernetes cluster (or running it just on the Docker engine instance). 
 
 Can you derive the steps that are needed to perform the described above? 
 
 Well, let me try:
 
-- Model export
-- Runtime preparation
+- Runtime preparation 
 - Model & Runtime packaging
 - Model versioning 
 - Model deployment 
 - Integration tests 
-- Performing A/B tests between model versions
-- Replaying predictions on the historical data
 - Model monitoring
-- Data monitoring 
-- Historical data subsampling 
-- Model retraining 
+- Training & production data profiling
+- Concept drift monitoring
+- Performing A/B tests between model versions
+- Replaying model versions on the historical data
+- Production data subsampling 
 
-Hmm, I kind of went too far... But let me put this straight. This field is still in the development (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. Describing each of the steps in the workflow may take us a whole new article(s) and I won't go that far now. 
+Hmm, I kind of went too far... But let me put this straight. This field is still in the development stage (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. 
 
 ![Image](workflow.png)
 
-But my point is - if you have to do this all manually, it can hardly be named "continuous delivery". Imagine, you could've deployed the model just by one command, hiding all of these intermediate steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => deliver => test => infer the model onto production. 
+Describing each of the steps in the workflow may take us a whole new article(s). Are you doing the blue circles manualy? Is it really a "continuous delivery"? Imagine, you could've deployed the model just by one command, hiding all of these intermediate blue steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => export => deploy => test => infer the model to production enironment. Let's dive in. 
 
 ## Prerequisites
 
