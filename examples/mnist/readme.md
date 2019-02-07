@@ -2,41 +2,58 @@
 
 Very often a workflow of training models and delivering them to the production environment contains loads of manual work. These could be various steps depending on the type of the model you're using and the workflow you're working within. 
 
-The workflow can be divided into two main parts: one related to the data science, and one related to the devops. The first one contains all the work related to the model development and model evaluation. To name a few aspects:
+Industry has already formed a rough vision how machine learning workflow should be executed. There are essentially two parts: one related to the Data Science and one related to the DevOps engineering. The first one contains all the work related to the problem research, model development and model evaluation.
 
-- Research in subject area
-    - Data collection
-    - Data cleaning
-    - Data analysis
-- Model building
-- Model evaluation
+- Research
+    - Defining an objective
+    - Defining requirements
+    - Defining methods
+- Data preparation
+    - Collecting data
+    - Preparing data
+- Model training
+    - Training the model
+    - Evaluating the model
+    - Tuning hyper-parameters
 - Model export
+    - Metadata extraction
+    - Exporting model's binaries
+    - Versioning model's artifact
 
-These have already become fundamental across the field. But what about the "devops"-ish part? Can you name aspects related to the model delivery to production? 
+The steps above encompass all the steps lying between defining an objective and finally obtaining an artifact to be used for getting predictions. But the raw model artifact itself is not capable of serving incoming predictions. We have to define an infrastructure where it can be running and this is where the second "DevOps" part comes into play. Just as a quick test for yourself, can you name steps that will be involved in this process? 
 
-The most popular solutions I could've found there is building a Python web server (most commonly on Flask framework) and using it as a base for model inference. The model is typically uploaded via VSC/SSH or delivered as Python package. Sometimes there could be a NGINX server, load balancing each request across multiple Flask servers. The most recent recipes include packing the model to container and deploying it to the Kubernetes cluster (or running it just on the Docker engine instance). 
+The most popular solutions I could've found there is building a Python web server (most commonly on Flask framework) and using it as a base for model inference. The model is typically uploaded via VSC/SSH or delivered as Python package. Sometimes there could be a NGINX server, load balancing each request across multiple Flask servers. The most recent recipes include packing the model to container and deploying it to the Kubernetes cluster (or just running it on the container engine instance). 
 
-Can you derive the steps that are needed to perform the described above? 
+We can disassemble aforementioned and extend it further to define a more comprehensive scope of second part of the job. 
 
-Well, let me try:
+- Model deployment
+    - Preparing infrastructure for the model
+    - Preparing runtime for the model
+    - Deploying runtime with the model on the infrastructure
+    - Performing integration tests 
+- Model release testing
+    - A/B or Canary testing
+    - Historical data replay
+- Model inference
+    - Model scaling & load balancing
+- Model performance monitoring
+    - Monitoring model inputs & outputs
+    - Monitoring concept drifts
+    - Anomaly detection
+    - Data profiling
+- Model performance analysis
+    - Accuracy, Error rate, Recall, Precision metrics
+    - Complex metrics
+    - Root cause analysis upon monitoring alerts
 
-- Runtime preparation 
-- Model & Runtime packaging
-- Model versioning 
-- Model deployment 
-- Integration tests 
-- Model monitoring
-- Training & production data profiling
-- Concept drift monitoring
-- Performing A/B tests between model versions
-- Replaying model versions on the historical data
-- Production data subsampling 
 
-Hmm, I kind of went too far... But let me put this straight. This field is still in the development stage (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. Describing each of the steps in the workflow may take us a whole new article(s).
+<!-- The aforementioned steps are considered domain best practices. But since the domain is still in the development stage (https://twitter.com/AndrewYNg/status/1080887386488299520) they might vary from company to company. The workflow changes, fluctuates by adding new aspects and removing other ones. -->
+
+<!-- Hmm, I kind of went too far... But let me put this straight. This field is still in the development stage (https://twitter.com/AndrewYNg/status/1080887386488299520). From company to company the workflow changes, fluctuates by adding new aspects and removing the other ones. Describing each of the steps in the workflow may take us a whole new article(s).
 
 ![Image](workflow.png)
 
-Are you doing the blue circles manually? If so, is it really a "continuous delivery"? Imagine, you could've deployed the model just by one command, hiding all of these intermediate blue steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => export => deploy => test => infer the model into the production environment. Let's dive in. 
+Are you doing the blue circles manually? If so, is it really a "continuous delivery"? Imagine, you could've deployed the model just by one command, hiding all of these intermediate blue steps. I can take this even further - you can configure a whole pipeline that will train => evaluate => export => deploy => test => infer the model into the production environment. Let's dive in.  -->
 
 ## Prerequisites
 

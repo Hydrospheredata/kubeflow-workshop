@@ -1,7 +1,0 @@
-# application.yaml 
-
-kind: Application
-name: mnist-app-test
-singular:
-  model: mnist-test:1
-  runtime: hydrosphere/serving-runtime-tensorflow:1.7.0-latest
