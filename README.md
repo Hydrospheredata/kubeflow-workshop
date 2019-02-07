@@ -1,6 +1,6 @@
 # Hydrosphere + Kubeflow Pipelines (Argo)
 
-This example shows, how to orchestrate a machine learning workflow with [Kubeflow](https://www.kubeflow.org/) and use [Hydrosphere Serving](https://hydrosphere.io/serving/) for model management. 
+This example shows how to orchestrate a machine learning workflow with [Kubeflow](https://www.kubeflow.org/) and use [Hydrosphere Serving](https://hydrosphere.io/serving/) for model management. 
 
 ## Prerequisites
 
