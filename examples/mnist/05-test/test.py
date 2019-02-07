@@ -34,6 +34,6 @@ if __name__ == "__main__":
     for index, image in enumerate(data):
         response = requests.post(url=service_link, json={'imgs': [image.tolist()]})
         predicted.append(response.json()["class_ids"][0][0])
-        time.sleep(0.4)
+        time.sleep(4)
         
     assert accuracy_score(labels[:count], predicted[:count]) > acceptable_accuracy
