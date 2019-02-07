@@ -25,10 +25,9 @@ cd kubeflow
 export KUBEFLOW_TAG=v0.4.1
 
 curl https://raw.githubusercontent.com/kubeflow/kubeflow/${KUBEFLOW_TAG}/scripts/download.sh | bash
-
-helm repo add hydro-serving https://hydrospheredata.github.io/hydro-serving-helm/
-
-helm install --name serving --namespace kubeflow hydro-serving/serving 
 ```
 
-More details and configurations docs for serving are [here](https://github.com/Hydrospheredata/hydro-serving-helm).
+```
+helm repo add hydro-serving https://hydrospheredata.github.io/hydro-serving-helm/
+helm install --name serving --namespace kubeflow hydro-serving/serving 
+```
