@@ -4,13 +4,6 @@ This example shows, how to orchestrate a machine learning workflow with [Kubeflo
 
 ## Prerequisites
 
-### Kubernetes Cluster
-
-- Kubernetes 1.9
-- AWS S3 Access
-
-### Locally
-
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - [argo](https://github.com/argoproj/argo/blob/master/demo.md#1-download-argo)
 - [ksonnet](https://ksonnet.io/#get-started)
