@@ -21,10 +21,10 @@ def download_files(base_url, base_dir):
         download_url = urllib.parse.urljoin(base_url, file)
         download_path = os.path.join(base_dir, file)
         local_file, _ = urllib.request.urlretrieve(download_url, download_path)
-        unpack_file(local_file, base_dir)
+        unpack_archive(local_file, base_dir)
 
 
-def unpack_file(file, base_dir):
+def unpack_archive(file, base_dir):
     """ Unpack the compressed file. """
 
     print(f"Unpacking archive {file}", flush=True)

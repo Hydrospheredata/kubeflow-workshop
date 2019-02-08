@@ -2,10 +2,10 @@ from sklearn.metrics import accuracy_score
 import os, time, requests
 import numpy as np
 
-host_address = os.environ.get("CLUSTER_ADDRESS", "https://dev.k8s.hydrosphere/io")
+host_address = os.environ.get("CLUSTER_ADDRESS", "http://localhost")
 application_name = os.environ.get("APPLICATION_NAME", "mnist-app")
 signature_name = os.environ.get("SIGNATURE_NAME", "predict")
-warmup_images_count = int(os.environ.get("WARMUP_IMAGES_AMOUNT", 1000))
+warmup_images_count = int(os.environ.get("WARMUP_IMAGES_AMOUNT", 100))
 acceptable_accuracy = float(os.environ.get("ACCEPTABLE_ACCURACY", 0.90))
 
 mnist_base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
