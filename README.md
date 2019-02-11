@@ -4,23 +4,8 @@ This example shows how to orchestrate a machine learning workflow with [Kubeflow
 
 ## Prerequisites
 
-- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-- [argo](https://github.com/argoproj/argo/blob/master/demo.md#1-download-argo)
-- [ksonnet](https://ksonnet.io/#get-started)
-- [helm](https://docs.helm.sh/using_helm/#installing-helm)
-- Admin access to kubernetes cluster
+- Admin access to Kubernetes cluster
+- [Kubeflow](https://www.kubeflow.org/docs/started/getting-started/)
+- [Hydrosphere Serving](https://hydrosphere.io/serving-docs/installation.html#kubernetes)
 
-## Setting up Kubernetes Cluster
-
-```
-mkdir kubeflow
-cd kubeflow
-export KUBEFLOW_TAG=v0.4.1
-
-curl https://raw.githubusercontent.com/kubeflow/kubeflow/${KUBEFLOW_TAG}/scripts/download.sh | bash
-```
-
-```
-helm repo add hydro-serving https://hydrospheredata.github.io/hydro-serving-helm/
-helm install --name serving --namespace kubeflow hydro-serving/serving 
-```
+_Note: All components of Kubeflow by default will be installed into `kubeflow` namespace._
