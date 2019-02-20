@@ -67,9 +67,3 @@ if __name__ == "__main__":
     download_mnist(
         base_url="http://yann.lecun.com/exdb/mnist/",
         base_dir=os.environ.get("MNIST_DATA_DIR", "data/mnist"))
-
-
-       
-        
-
-

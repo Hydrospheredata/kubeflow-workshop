@@ -19,11 +19,12 @@ def pipeline_definition(
 ):
 
     data_pvc = k8s.V1PersistentVolumeClaimVolumeSource(claim_name="data")
-    models_pvc = k8s.V1PersistentVolumeClaimVolumeSource(claim_name="models")
     data_volume = k8s.V1Volume(name="data", persistent_volume_claim=data_pvc)
-    models_volume = k8s.V1Volume(name="models", persistent_volume_claim=models_pvc)
     data_volume_mount = k8s.V1VolumeMount(
         mount_path="{{workflow.parameters.data-directory}}", name="data")
+    
+    models_pvc = k8s.V1PersistentVolumeClaimVolumeSource(claim_name="models")
+    models_volume = k8s.V1Volume(name="models", persistent_volume_claim=models_pvc)
     models_volume_mount = k8s.V1VolumeMount(
         mount_path="{{workflow.parameters.models-directory}}", name="models")
     
@@ -51,8 +52,6 @@ def pipeline_definition(
         name="BATCH_SIZE", value="{{workflow.parameters.batch-size}}")
     warmup_count_env = k8s.V1EnvVar(
         name="WARMUP_IMAGES_AMOUNT", value="{{workflow.parameters.warmpup-count}}")
-
-
 
     # 1. Download MNIST data
     download = dsl.ContainerOp(
@@ -91,6 +90,7 @@ def pipeline_definition(
     upload.add_volume(models_volume) 
     upload.add_volume_mount(models_volume_mount)
     upload.add_env_variable(models_directory_env)
+    upload.add_env_variable(data_directory_env)
     upload.add_env_variable(model_name_env)
     upload.add_env_variable(hydrosphere_name_env)
     upload.add_env_variable(hydrosphere_address_env)
@@ -121,19 +121,6 @@ def pipeline_definition(
     test.add_env_variable(signature_name_env)
     test.add_env_variable(warmup_count_env)
     test.add_env_variable(acceptable_accuracy_env)
-
-    # 6. Clean environment
-    clean = dsl.ContainerOp(
-        name="clean",
-        image="tidylobster/mnist-pipeline-clean:latest")
-    clean.after(test)
-
-    clean.add_volume(data_volume)
-    clean.add_volume_mount(data_volume_mount)
-    clean.add_env_variable(data_directory_env)
-    clean.add_volume(models_volume) 
-    clean.add_volume_mount(models_volume_mount)
-    clean.add_env_variable(models_directory_env)
     
 
 if __name__ == "__main__":
