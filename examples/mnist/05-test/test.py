@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score
 
 
-host_address = os.environ.get("CLUSTER_ADDRESS", "https://dev.k8s.hydrosphere.io")
+host_address = os.environ.get("CLUSTER_ADDRESS", "http://localhost")
 application_name = os.environ.get("APPLICATION_NAME", "mnist-app")
 signature_name = os.environ.get("SIGNATURE_NAME", "predict")
 warmup_images_count = int(os.environ.get("WARMUP_IMAGES_AMOUNT", 100))
