@@ -25,7 +25,7 @@ def download_files(base_url, base_dir):
 
 
 def unpack_archive(file, base_dir):
-    """ Unpack the compressed file. """
+    """ Unpack compressed file """
 
     print(f"Unpacking archive {file}", flush=True)
     with gzip.open(file, 'rb') as f_in, open(file[:-3],'wb') as f_out:
@@ -34,7 +34,7 @@ def unpack_archive(file, base_dir):
 
 
 def process_images(path, dataset):
-    """ Preprocess downloaded MNIST datasets. """
+    """ Preprocess downloaded MNIST datasets """
     
     print(f"Processing images {os.path.join(path, dataset)}", flush=True)
     label_file = os.path.join(path, dataset + '-labels-idx1-ubyte')
@@ -56,7 +56,7 @@ def process_images(path, dataset):
 
 
 def download_mnist(base_url, base_dir):
-    """ Donwload original MNIST structs and unpack them into .png files """
+    """ Download original MNIST structs and pack them into numpy arrays """
 
     download_files(base_url, base_dir)
     process_images(base_dir, "train")
