@@ -1,3 +1,11 @@
 __pycache__/
 .DS_Store
 .vscode
+/**/.ipynb_checkpoints
+/**/data
+/**/models
+/**/other
+*.npz
+*.csv
+*.txt
+*.tar.gz

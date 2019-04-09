@@ -1,36 +1,40 @@
-import os
+import os, json
 import tensorflow as tf
 import numpy as np
+import pandas as pd
+from sklearn.metrics import accuracy_score
 
 models_path = os.environ.get("MNIST_MODELS_DIR", "models/mnist")
 base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
+dev_env = int(os.environ.get("DEV_ENV", "0"))
 train_file = "train.npz"
 test_file = "t10k.npz"
 
 learning_rate = float(os.environ.get("LEARNING_RATE", 0.01))
-num_steps = int(os.environ.get("LEARNING_STEPS", 10000))
+num_steps = int(os.environ.get("LEARNING_STEPS", 500))
 batch_size = int(os.environ.get("BATCH_SIZE", 256))
 
 
-def input_fn(file):
+def input_fn(file, shuffle=True):
     with np.load(os.path.join(base_path, file)) as data:
         imgs = data["imgs"]
         labels = data["labels"].astype(int)
-    return tf.estimator.inputs.numpy_input_fn(
-        x = {"imgs": imgs}, y=labels, shuffle=True, batch_size=batch_size)
+    return imgs, labels, tf.estimator.inputs.numpy_input_fn(
+        x = {"imgs": imgs}, y=labels, shuffle=shuffle, batch_size=batch_size)
 
 if __name__ == "__main__":
     tf.logging.set_verbosity(tf.logging.INFO)
 
     # Prepare data inputs
-    imgs = tf.feature_column.numeric_column("imgs", shape=(28,28))
-    train_fn, test_fn = input_fn(train_file), input_fn(test_file)
+    img_feature_column = tf.feature_column.numeric_column("imgs", shape=(28,28))
+    _, _, train_fn = input_fn(train_file)
+    _, labels, test_fn = input_fn(test_file, shuffle=False)
 
     # Create the model
     estimator = tf.estimator.DNNClassifier(
         n_classes=10,
         hidden_units=[256, 64],
-        feature_columns=[imgs],
+        feature_columns=[img_feature_column],
         optimizer=tf.train.AdamOptimizer(learning_rate=learning_rate))
 
     # Train and evaluate the model
@@ -43,3 +47,29 @@ if __name__ == "__main__":
         .export.build_raw_serving_input_receiver_fn(
             {"imgs": tf.placeholder(tf.float32, shape=(None, 28, 28))})
     estimator.export_savedmodel(models_path, serving_input_receiver_fn)
+
+    # Perform metrics calculations
+    accuracy_file = "./accuracy.txt" if dev_env else "/accuracy.txt"
+    metrics_file = "./mlpipeline-metrics.json" if dev_env else "/mlpipeline-metrics.json"
+    
+    accuracy = accuracy_score(labels, list(map(lambda x: x["class_ids"][0], estimator.predict(test_fn))))
+    metrics = {
+        'metrics': [
+            {
+                'name': 'accuracy-score',   # -- The name of the metric. Visualized as the column 
+                                            # name in the runs table.
+                'numberValue':  accuracy,   # -- The value of the metric. Must be a numeric value.
+                'format': "PERCENTAGE",     # -- The optional format of the metric. Supported values are 
+                                            # "RAW" (displayed in raw format) and "PERCENTAGE" 
+                                            # (displayed in percentage format).
+            },
+        ],
+    }
+
+    # Dump metrics
+    with open(accuracy_file, "w+") as file:
+        file.write(str(accuracy))
+    
+    with open(metrics_file, "w+") as file:
+        json.dump(metrics, file)
+    

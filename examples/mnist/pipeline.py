@@ -4,18 +4,18 @@ import kubernetes.client.models as k8s
 
 @dsl.pipeline(name="mnist", description="MNIST classifier")
 def pipeline_definition(
-    hydrosphere_name="local",
-    hydrosphere_address="http://hydro-serving-sidecar-serving.kubeflow.svc.cluster.local:8080",
+    hydrosphere_address="{hydrosphere-instance-address}",  # <-- Replace with correct instance address
     data_directory='/data/mnist',
     models_directory="/models/mnist",
     learning_rate="0.01",
-    learning_steps="5000",
+    learning_steps="10000",
     batch_size="256",
     warmpup_count="100",
     model_name="mnist",
     application_name="mnist-app",
     signature_name="predict",
     acceptable_accuracy="0.90",
+    requests_delay="4"
 ):
 
     data_pvc = k8s.V1PersistentVolumeClaimVolumeSource(claim_name="data")
@@ -30,8 +30,6 @@ def pipeline_definition(
     
     hydrosphere_address_env = k8s.V1EnvVar(
         name="CLUSTER_ADDRESS", value="{{workflow.parameters.hydrosphere-address}}")
-    hydrosphere_name_env = k8s.V1EnvVar(
-        name="CLUSTER_NAME", value="{{workflow.parameters.hydrosphere-name}}")
     data_directory_env = k8s.V1EnvVar(
         name="MNIST_DATA_DIR", value="{{workflow.parameters.data-directory}}")
     models_directory_env = k8s.V1EnvVar(
@@ -52,11 +50,13 @@ def pipeline_definition(
         name="BATCH_SIZE", value="{{workflow.parameters.batch-size}}")
     warmup_count_env = k8s.V1EnvVar(
         name="WARMUP_IMAGES_AMOUNT", value="{{workflow.parameters.warmpup-count}}")
+    requests_delay_env = k8s.V1EnvVar(
+        name="REQUESTS_DELAY", value="{{workflow.parameters.requests-delay}}")
 
     # 1. Download MNIST data
     download = dsl.ContainerOp(
         name="download",
-        image="tidylobster/mnist-pipeline-download:latest")
+        image="{download-mnist-image}")     # <-- Replace with correct docker image
     download.add_volume(data_volume)
     download.add_volume_mount(data_volume_mount)
     download.add_env_variable(data_directory_env)
@@ -65,7 +65,9 @@ def pipeline_definition(
     # 2. Train and save a MNIST classifier using Tensorflow
     train = dsl.ContainerOp(
         name="train",
-        image="tidylobster/mnist-pipeline-train:latest")
+        image="{train-mnist-image}",        # <-- Replace with correct docker image
+        file_outputs={"accuracy": "/accuracy.txt"})
+
     train.after(download)
     train.set_memory_request('2G')
     train.set_cpu_request('1')
@@ -83,8 +85,9 @@ def pipeline_definition(
     # 3. Upload trained model to the cluster
     upload = dsl.ContainerOp(
         name="upload",
-        image="tidylobster/mnist-pipeline-upload:latest",
-        file_outputs={"model_version": "/model_version.txt"})
+        image="{docker-upload-image}",         # <-- Replace with correct docker image
+        file_outputs={"model-version": "/model-version.txt"},
+        arguments=[train.outputs["accuracy"]])
     upload.after(train)
     
     upload.add_volume(models_volume) 
@@ -92,35 +95,59 @@ def pipeline_definition(
     upload.add_env_variable(models_directory_env)
     upload.add_env_variable(data_directory_env)
     upload.add_env_variable(model_name_env)
-    upload.add_env_variable(hydrosphere_name_env)
     upload.add_env_variable(hydrosphere_address_env)
+    upload.add_env_variable(learning_rate_env)
+    upload.add_env_variable(learning_steps_env)
+    upload.add_env_variable(batch_size_env)
 
-    # 4. Deploy application
-    deploy = dsl.ContainerOp(
-        name="deploy",
-        image="tidylobster/mnist-pipeline-deploy:latest",
-        arguments=[upload.outputs["model_version"]])
-    deploy.after(upload)
+    # 4. Pre-deploy application
+    predeploy = dsl.ContainerOp(
+        name="predeploy",
+        image="{docker-predeploy-image}",        # <-- Replace with correct docker image
+        arguments=[upload.outputs["model-version"]],
+        file_outputs={"predeploy-app-name": "/predeploy-app-name.txt"})
+    predeploy.after(upload)
 
-    deploy.add_env_variable(hydrosphere_name_env)
-    deploy.add_env_variable(hydrosphere_address_env)
-    deploy.add_env_variable(application_name_env)
-    deploy.add_env_variable(model_name_env)
-
+    predeploy.add_env_variable(hydrosphere_address_env)
+    predeploy.add_env_variable(application_name_env)
+    predeploy.add_env_variable(model_name_env)
+    
     # 5. Test the model 
     test = dsl.ContainerOp(
         name="test",
-        image="tidylobster/mnist-pipeline-test:latest")
-    test.after(deploy)
+        image="{docker-test-image}",               # <-- Replace with correct docker image
+        arguments=[predeploy.outputs["predeploy-app-name"]])
+    test.set_retry(3)
+    test.after(predeploy)
 
     test.add_volume(data_volume) 
     test.add_volume_mount(data_volume_mount)
     test.add_env_variable(data_directory_env)
     test.add_env_variable(hydrosphere_address_env)
     test.add_env_variable(application_name_env)
-    test.add_env_variable(signature_name_env)
+    test.add_env_variable(signature_name_env) 
     test.add_env_variable(warmup_count_env)
     test.add_env_variable(acceptable_accuracy_env)
+    test.add_env_variable(requests_delay_env)
+
+    # 6. Remove predeploy application
+    rm_predeploy = dsl.ContainerOp(
+        name="remove-predeploy",
+        image="{docker-remove-predeploy-image}",    # <-- Replace with correct docker image  
+        arguments=[predeploy.outputs["predeploy-app-name"]])
+    rm_predeploy.after(test)
+    rm_predeploy.add_env_variable(hydrosphere_address_env)
+
+    # 7. Deploy application
+    deploy = dsl.ContainerOp(
+        name="deploy",
+        image="{docker-deploy-image}",              # <-- Replace with correct docker image
+        arguments=[upload.outputs["model-version"]])
+    deploy.after(test)
+
+    deploy.add_env_variable(hydrosphere_address_env)
+    deploy.add_env_variable(application_name_env)
+    deploy.add_env_variable(model_name_env)
     
 
 if __name__ == "__main__":

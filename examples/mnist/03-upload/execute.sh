@@ -1,17 +1,30 @@
 # Define where Hydrosphere Serving instance is running.
-hs cluster add --name $CLUSTER_NAME --server $CLUSTER_ADDRESS
-hs cluster use $CLUSTER_NAME
+hs cluster add --name serving --server $CLUSTER_ADDRESS
+hs cluster use serving
 
 # By default tf.estimator.export_saved_model creates a folder with 
 # timestamp name, when the model will be saved. `cd` to that folder.
 cd ${MNIST_MODELS_DIR}
 cd $(ls -t | head -n1)
 
+# Get accuracy from the previous step
+export ACCURACY=$1
+
+cat > serving.yaml << EOL
+kind: Model
+name: ${MODEL_NAME}
+payload:
+  - "saved_model.pb"
+  - "variables/" 
+runtime: "hydrosphere/serving-runtime-tensorflow-1.13.1:latest"
+metadata: 
+  learning_rate: "${LEARNING_RATE}"
+  num_steps: "${LEARNING_STEPS}"
+  batch_size: "${BATCH_SIZE}"
+  accuracy: "${ACCURACY}"
+EOL
+
 # i.  Upload the model to Hydrosphere Serving
 # ii. Parse the status of the model uploading, retrieve the built 
 #     model version and write it to the `/model_version.txt` file. 
-hs upload --name $MODEL_NAME | tail -n 1 | jq ".version" > /model_version.txt
-
-# Push the training files and make a snapshot of them. 
-export MODEL_VERSION=$(cat /model_version.txt)
-hs profile push --model-version "$MODEL_NAME:$MODEL_VERSION" $MNIST_DATA_DIR
+hs upload | tail -n 1 | jq ".modelVersion" > /model-version.txt
