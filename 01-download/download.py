@@ -11,9 +11,11 @@ filenames = [
 ]
 
 
-def download_files(base_url, base_dir):
+def download_files(base_url, base_dir, filenames=None):
     """ Download required data """
-    global filenames
+    if not filenames: 
+        # if not any filenames provided, use global instead
+        filenames = globals()["filenames"]
     
     os.makedirs(base_dir, exist_ok=True)
     for file in filenames:

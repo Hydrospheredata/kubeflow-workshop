@@ -15,7 +15,8 @@ def pipeline_definition(
     application_name="mnist-app",
     signature_name="predict",
     acceptable_accuracy="0.90",
-    requests_delay="4"
+    requests_delay="4",
+    recurring_run="0",
 ):
 
     data_pvc = k8s.V1PersistentVolumeClaimVolumeSource(claim_name="data")
@@ -52,6 +53,8 @@ def pipeline_definition(
         name="WARMUP_IMAGES_AMOUNT", value="{{workflow.parameters.warmpup-count}}")
     requests_delay_env = k8s.V1EnvVar(
         name="REQUESTS_DELAY", value="{{workflow.parameters.requests-delay}}")
+    recurring_run_env = k8s.V1EnvVar(
+        name="RECURRING_RUN", value="{{workflow.parameters.recurring-run}}")
 
     # 1. Download MNIST data
     download = dsl.ContainerOp(
@@ -60,6 +63,17 @@ def pipeline_definition(
     download.add_volume(data_volume)
     download.add_volume_mount(data_volume_mount)
     download.add_env_variable(data_directory_env)
+
+    
+    # # 1. Make a sample of production data for retraining
+    # download = dsl.ContainerOp(
+    #     name="sample",
+    #     image="{sample-mnist-image}")     # <-- Replace with correct docker image
+    # download.add_volume(data_volume)
+    # download.add_volume_mount(data_volume_mount)
+    # download.add_env_variable(data_directory_env)
+    # download.add_env_variable(hydrosphere_address_env)
+    # download.add_env_variable(application_name_env)
     
 
     # 2. Train and save a MNIST classifier using Tensorflow
@@ -81,6 +95,7 @@ def pipeline_definition(
     train.add_env_variable(learning_rate_env)
     train.add_env_variable(learning_steps_env)
     train.add_env_variable(batch_size_env)
+    train.add_env_variable(recurring_run_env)
 
     # 3. Upload trained model to the cluster
     upload = dsl.ContainerOp(

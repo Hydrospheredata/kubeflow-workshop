@@ -6,9 +6,14 @@ from sklearn.metrics import accuracy_score
 
 models_path = os.environ.get("MNIST_MODELS_DIR", "models/mnist")
 base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
-dev_env = int(os.environ.get("DEV_ENV", "0"))
-train_file = "train.npz"
-test_file = "t10k.npz"
+recurring_run = int(os.environ.get("RECURRING_RUN", "0"))
+
+if recurring_run:
+    train_file = "subsample-train.npz"
+    test_file = "subsample-test.npz"
+else: 
+    train_file = "train.npz"
+    test_file = "t10k.npz"
 
 learning_rate = float(os.environ.get("LEARNING_RATE", 0.01))
 num_steps = int(os.environ.get("LEARNING_STEPS", 500))

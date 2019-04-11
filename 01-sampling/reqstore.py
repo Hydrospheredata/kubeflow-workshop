@@ -138,22 +138,3 @@ class TsRecord:
 
     def __repr__(self):
         return f"Record(ts={self.ts}, entries={self.entries})"
-
-
-def splice_entries(records: [TsRecord]):
-    return list(chain(*[item.entries for item in records]))
-
-
-if __name__ == "__main__":
-    addr = "http://localhost:7265"
-    name = "app1stage0"
-
-    binary_data = APIHelper.subsample(addr, name)
-    records = BinaryHelper.decode_records(binary_data)
-
-    i = 1
-    for record in records:
-        for entry in record.entries:
-            print(entry.response); i += 1 
-            break
-        break

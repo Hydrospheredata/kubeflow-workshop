@@ -4,11 +4,12 @@ from sklearn.metrics import accuracy_score
 
 
 host_address = os.environ.get("CLUSTER_ADDRESS", "http://localhost")
-application_name = sys.argv[1] if len(sys.argv) > 1 else "mnist-app"
+application_name = os.environ.get("APPLICAITON_NAME", "mnist-app")
+application_name = sys.argv[1] if len(sys.argv) > 1 else application_name
 signature_name = os.environ.get("SIGNATURE_NAME", "predict")
-warmup_images_count = int(os.environ.get("WARMUP_IMAGES_AMOUNT", 100))
+warmup_images_count = int(os.environ.get("WARMUP_IMAGES_AMOUNT", 50))
 acceptable_accuracy = float(os.environ.get("ACCEPTABLE_ACCURACY", 0.90))
-requests_delay = float(os.environ.get("REQUEST_DELAY", 4.))
+requests_delay = float(os.environ.get("REQUEST_DELAY", 0.5))
 
 mnist_base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
 test_file = "t10k.npz"
