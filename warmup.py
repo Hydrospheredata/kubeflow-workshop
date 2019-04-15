@@ -1,4 +1,4 @@
-import importlib.util, sqlite3
+import importlib.util, psycopg2
 import grpc, time, os
 import numpy as np
 import hydro_serving_grpc as hs 
@@ -23,12 +23,12 @@ def generate_data(mnist_base_path, test_file):
         permute = np.random.permutation(len(imgs))
         return imgs[permute], labels[permute]
 
-conn = sqlite3.connect('example.db')
+conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
 cur = conn.cursor()
 
 cur.execute('''
     CREATE TABLE IF NOT EXISTS 
-        requests (timestamp integer, uid integer, ground_truth integer)
+        requests (timestamp bigint, uid integer, ground_truth integer)
 ''')
 
 if __name__ == "__main__":
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         
         print(f"{index} | {int(index / requests_count * 100)}%", flush=True)
         cur.execute(
-            "INSERT INTO requests VALUES (?, ?, ?)",
+            "INSERT INTO requests VALUES (%s, %s, %s);",
             (result.trace_data.ts, result.trace_data.uid, int(label)))
         conn.commit()
         time.sleep(requests_delay)

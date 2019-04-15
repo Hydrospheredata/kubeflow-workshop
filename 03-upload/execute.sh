@@ -4,7 +4,7 @@ hs cluster use serving
 
 # By default tf.estimator.export_saved_model creates a folder with 
 # timestamp name, when the model will be saved. `cd` to that folder.
-cd ${MNIST_MODELS_DIR}
+cd ${MOUNT_PATH}; cd models/
 cd $(ls -t | head -n1)
 
 # Get accuracy from the previous step
@@ -22,6 +22,21 @@ metadata:
   num_steps: "${LEARNING_STEPS}"
   batch_size: "${BATCH_SIZE}"
   accuracy: "${ACCURACY}"
+monitoring:
+  - name: Requests
+    kind: CounterMetricSpec
+    config:
+      "interval": 15
+  - name: Latency
+    kind: LatencyMetricSpec
+    config:
+      "interval": 15
+  - name: Autoencoder
+    kind: ImageAEMetricSpec
+    with-health: true
+    config:
+      threshold: 0.15
+      application: mnist-concept-app
 EOL
 
 # i.  Upload the model to Hydrosphere Serving

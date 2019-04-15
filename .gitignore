@@ -9,3 +9,4 @@ __pycache__/
 *.csv
 *.txt
 *.tar.gz
+*.db

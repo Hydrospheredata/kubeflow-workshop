@@ -4,8 +4,10 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score
 
-models_path = os.environ.get("MNIST_MODELS_DIR", "models/mnist")
-base_path = os.environ.get("MNIST_DATA_DIR", "data/mnist")
+mount_path = os.environ.get("MOUNT_PATH", "./")
+models_path = os.path.join(mount_path, "models")
+data_path = os.path.join(mount_path, "data", "mnist")
+dev_env = int(os.environ.get("DEV_ENV", "0"))
 recurring_run = int(os.environ.get("RECURRING_RUN", "0"))
 
 if recurring_run:
@@ -21,7 +23,7 @@ batch_size = int(os.environ.get("BATCH_SIZE", 256))
 
 
 def input_fn(file, shuffle=True):
-    with np.load(os.path.join(base_path, file)) as data:
+    with np.load(os.path.join(data_path, file)) as data:
         imgs = data["imgs"]
         labels = data["labels"].astype(int)
     return imgs, labels, tf.estimator.inputs.numpy_input_fn(

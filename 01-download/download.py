@@ -66,6 +66,8 @@ def download_mnist(base_url, base_dir):
 
 
 if __name__ == "__main__": 
+    mount_path = os.environ.get("MOUNT_PATH", "./")
+    data_path = os.path.join(mount_path, "data", "mnist")
     download_mnist(
         base_url="http://yann.lecun.com/exdb/mnist/",
-        base_dir=os.environ.get("MNIST_DATA_DIR", "data/mnist"))
+        base_dir=data_path)
