@@ -10,3 +10,4 @@ __pycache__/
 *.txt
 *.tar.gz
 *.db
+docker.sh

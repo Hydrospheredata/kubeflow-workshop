@@ -1,26 +1,32 @@
-import pickle, os, sqlite3, random, urllib.parse
+import requests, psycopg2
+import pickle, os, random, urllib.parse
 import numpy as np
-import reqstore, requests
 from tensorflow import make_ndarray
+from hydro_serving_grpc.timemachine.reqstore_client import *
 
-mount_path = os.environ.get("MOUNT_PATH", "./")
-data_path = os.path.join(mount_path, "data", "mnist")
+
 application_name = os.environ.get("APPLICATION_NAME", "mnist-app")
 host_address = os.environ.get("CLUSTER_ADDRESS", "http://localhost")
-app_addr = urllib.parse.urljoin(host_address, f"api/v2/application/{application_name}")
+mount_path = os.environ.get("MOUNT_PATH", "./")
+data_path = os.path.join(mount_path, "data", "mnist")
 reqstore_addr = urllib.parse.urljoin(host_address, "reqstore/")
 
 
-def get_application_id(url):
-    return requests.get(url).json() \
+def get_model_version_id(application_name):
+    addr = urllib.parse.urljoin(host_address, f"api/v2/application/{application_name}")
+    return requests.get(addr).json() \
         ["executionGraph"]["stages"][0]["modelVariants"][0]["modelVersion"]["id"]
 
 
 if __name__ == "__main__":
-    
-    assert os.path.exists("./example.db"), \
-        f"Please, execute ../warmup.py file and put emitted `example.db` to this directory."
-    conn = sqlite3.connect('./example.db')
+    client = ReqstoreClient("https://dev.k8s.hydrosphere.io/reqstore/", 443)
+    model_version_id = str(get_model_version_id(application_name))
+
+    data = client.getRange(0, 1854897851804888100, model_version_id)
+    for item in data:
+        print(item)
+
+    conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
     cur = conn.cursor()
 
     application_id = str(get_application_id(app_addr))

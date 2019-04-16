@@ -48,23 +48,15 @@ def pipeline_definition(
     recurring_run_env = k8s.V1EnvVar(
         name="RECURRING_RUN", value="{{workflow.parameters.recurring-run}}")
 
-    # 1. Download MNIST data
-    download = dsl.ContainerOp(
-        name="download",
-        image="tidylobster/mnist-pipeline-download:latest")     # <-- Replace with correct docker image
-    download.add_volume(storage_volume)
-    download.add_volume_mount(storage_volume_mount)
-    download.add_env_variable(mount_path_env)
-
     # # 1. Make a sample of production data for retraining
-    # download = dsl.ContainerOp(
-    #     name="sample",
-    #     image="tidylobster/mnist-pipeline-sampling:latest")     # <-- Replace with correct docker image
-    # download.add_volume(storage_volume)
-    # download.add_volume_mount(storage_volume_mount)
-    # download.add_env_variable(mount_path_env)
-    # download.add_env_variable(hydrosphere_address_env)
-    # download.add_env_variable(application_name_env)
+    sample = dsl.ContainerOp(
+        name="sample",
+        image="tidylobster/mnist-pipeline-sampling:latest")     # <-- Replace with correct docker image
+    sample.add_volume(storage_volume)
+    sample.add_volume_mount(storage_volume_mount)
+    sample.add_env_variable(mount_path_env)
+    sample.add_env_variable(hydrosphere_address_env)
+    sample.add_env_variable(application_name_env)
     
     # 2. Train and save a MNIST classifier using Tensorflow
     train = dsl.ContainerOp(
@@ -72,7 +64,7 @@ def pipeline_definition(
         image="tidylobster/mnist-pipeline-train:latest",        # <-- Replace with correct docker image
         file_outputs={"accuracy": "/accuracy.txt"})
 
-    train.after(download)
+    train.after(sample)
     train.set_memory_request('2G')
     train.set_cpu_request('1')
 
@@ -154,4 +146,4 @@ def pipeline_definition(
 
 if __name__ == "__main__":
     import kfp.compiler as compiler
-    compiler.Compiler().compile(pipeline_definition, "pipeline.tar.gz")
+    compiler.Compiler().compile(pipeline_definition, "pipeline-recurring.tar.gz")
