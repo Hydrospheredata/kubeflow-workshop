@@ -19,7 +19,7 @@ def download_files(base_url, base_dir, filenames=None):
     
     os.makedirs(base_dir, exist_ok=True)
     for file in filenames:
-        print(f"Started downloading {file}", flush=True)
+        print("Started downloading {}".format(file), flush=True)
         download_url = urllib.parse.urljoin(base_url, file)
         download_path = os.path.join(base_dir, file)
         local_file, _ = urllib.request.urlretrieve(download_url, download_path)
@@ -29,7 +29,7 @@ def download_files(base_url, base_dir, filenames=None):
 def unpack_archive(file, base_dir):
     """ Unpack compressed file """
 
-    print(f"Unpacking archive {file}", flush=True)
+    print("Unpacking archive {}".format(file), flush=True)
     with gzip.open(file, 'rb') as f_in, open(file[:-3],'wb') as f_out:
         shutil.copyfileobj(f_in, f_out)
     os.remove(file)
@@ -38,7 +38,7 @@ def unpack_archive(file, base_dir):
 def process_images(path, dataset):
     """ Preprocess downloaded MNIST datasets """
     
-    print(f"Processing images {os.path.join(path, dataset)}", flush=True)
+    print("Processing images {}".format(os.path.join(path, dataset)), flush=True)
     label_file = os.path.join(path, dataset + '-labels-idx1-ubyte')
     with open(label_file, 'rb') as file:
         _, num = struct.unpack(">II", file.read(8))
@@ -53,7 +53,7 @@ def process_images(path, dataset):
         imgs = imgs.astype(numpy.float32) / 255.0
 
     os.remove(label_file); os.remove(img_file)
-    print(f"Saving files under {os.path.join(path, dataset)} path", flush=True)
+    print("Saving files under {} path".format(os.path.join(path, dataset)), flush=True)
     numpy.savez_compressed(os.path.join(path, dataset), imgs=imgs, labels=labels)
 
 

@@ -1,8 +1,6 @@
 import os, json
 import tensorflow as tf
 import numpy as np
-import pandas as pd
-from sklearn.metrics import accuracy_score
 
 mount_path = os.environ.get("MOUNT_PATH", "./")
 models_path = os.path.join(mount_path, "models")
@@ -18,7 +16,7 @@ else:
     test_file = "t10k.npz"
 
 learning_rate = float(os.environ.get("LEARNING_RATE", 0.01))
-num_steps = int(os.environ.get("LEARNING_STEPS", 500))
+epochs = int(os.environ.get("EPOCHS", 10))
 batch_size = int(os.environ.get("BATCH_SIZE", 256))
 
 
@@ -26,16 +24,15 @@ def input_fn(file, shuffle=True):
     with np.load(os.path.join(data_path, file)) as data:
         imgs = data["imgs"]
         labels = data["labels"].astype(int)
-    return imgs, labels, tf.estimator.inputs.numpy_input_fn(
-        x = {"imgs": imgs}, y=labels, shuffle=shuffle, batch_size=batch_size)
+    return tf.estimator.inputs.numpy_input_fn(x={"imgs": imgs}, y=labels, 
+        shuffle=shuffle, batch_size=batch_size, num_epochs=epochs)
 
 if __name__ == "__main__":
     tf.logging.set_verbosity(tf.logging.INFO)
 
     # Prepare data inputs
     img_feature_column = tf.feature_column.numeric_column("imgs", shape=(28,28))
-    _, _, train_fn = input_fn(train_file)
-    _, labels, test_fn = input_fn(test_file, shuffle=False)
+    train_fn, test_fn = input_fn(train_file), input_fn(test_file)
 
     # Create the model
     estimator = tf.estimator.DNNClassifier(
@@ -45,9 +42,9 @@ if __name__ == "__main__":
         optimizer=tf.train.AdamOptimizer(learning_rate=learning_rate))
 
     # Train and evaluate the model
-    train_spec = tf.estimator.TrainSpec(input_fn=train_fn, max_steps=num_steps)
-    eval_spec = tf.estimator.EvalSpec(input_fn=test_fn)
-    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+    estimator.train(train_fn)
+    evaluation = estimator.evaluate(test_fn)
+    accuracy = float(evaluation["accuracy"])
 
     # Export the model 
     serving_input_receiver_fn = tf.estimator \
@@ -59,13 +56,12 @@ if __name__ == "__main__":
     accuracy_file = "./accuracy.txt" if dev_env else "/accuracy.txt"
     metrics_file = "./mlpipeline-metrics.json" if dev_env else "/mlpipeline-metrics.json"
     
-    accuracy = accuracy_score(labels, list(map(lambda x: x["class_ids"][0], estimator.predict(test_fn))))
     metrics = {
         'metrics': [
             {
                 'name': 'accuracy-score',   # -- The name of the metric. Visualized as the column 
                                             # name in the runs table.
-                'numberValue':  accuracy,   # -- The value of the metric. Must be a numeric value.
+                'numberValue': accuracy,    # -- The value of the metric. Must be a numeric value.
                 'format': "PERCENTAGE",     # -- The optional format of the metric. Supported values are 
                                             # "RAW" (displayed in raw format) and "PERCENTAGE" 
                                             # (displayed in percentage format).

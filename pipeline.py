@@ -7,7 +7,7 @@ def pipeline_definition(
     hydrosphere_address="{hydrosphere-instance-address}",  # <-- Replace with correct instance address
     mount_path='/storage',
     learning_rate="0.01",
-    learning_steps="10000",
+    epochs="10",
     batch_size="256",
     warmpup_count="100",
     model_name="mnist",
@@ -37,8 +37,8 @@ def pipeline_definition(
         name="ACCEPTABLE_ACCURACY", value="{{workflow.parameters.acceptable-accuracy}}")
     learning_rate_env = k8s.V1EnvVar(
         name="LEARNING_RATE", value="{{workflow.parameters.learning-rate}}")
-    learning_steps_env = k8s.V1EnvVar(
-        name="LEARNING_STEPS", value="{{workflow.parameters.learning-steps}}")
+    epochs_env = k8s.V1EnvVar(
+        name="EPOCHS", value="{{workflow.parameters.epochs}}")
     batch_size_env = k8s.V1EnvVar(
         name="BATCH_SIZE", value="{{workflow.parameters.batch-size}}")
     warmup_count_env = k8s.V1EnvVar(
@@ -80,7 +80,7 @@ def pipeline_definition(
     train.add_volume_mount(storage_volume_mount)
     train.add_env_variable(mount_path_env)
     train.add_env_variable(learning_rate_env)
-    train.add_env_variable(learning_steps_env)
+    train.add_env_variable(epochs_env)
     train.add_env_variable(batch_size_env)
     train.add_env_variable(recurring_run_env)
 
@@ -98,7 +98,7 @@ def pipeline_definition(
     upload.add_env_variable(model_name_env)
     upload.add_env_variable(hydrosphere_address_env)
     upload.add_env_variable(learning_rate_env)
-    upload.add_env_variable(learning_steps_env)
+    upload.add_env_variable(epochs_env)
     upload.add_env_variable(batch_size_env)
 
     # 4. Pre-deploy application
