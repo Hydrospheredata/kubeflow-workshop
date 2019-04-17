@@ -13,24 +13,44 @@ export ACCURACY=$1
 cat > serving.yaml << EOL
 kind: Model
 name: ${MODEL_NAME}
-payload:
-  - "saved_model.pb"
-  - "variables/" 
-runtime: "hydrosphere/serving-runtime-tensorflow-1.13.1:latest"
 metadata: 
   learning_rate: "${LEARNING_RATE}"
   epochs: "${EPOCHS}"
   batch_size: "${BATCH_SIZE}"
   accuracy: "${ACCURACY}"
+payload:
+  - "saved_model.pb"
+  - "variables/" 
+runtime: "hydrosphere/serving-runtime-tensorflow-1.13.1:latest"
+contract: 
+  name: predict
+  inputs:
+    imgs:
+      type: float32
+      shape: [-1, 28, 28]
+      profile: image
+  outputs:
+    probabilities:
+      type: float32
+      shape: [-1, 10]
+    class_ids: 
+      type: int64
+      shape: [-1, 1]
+    logits:
+      type: float32
+      shape: [-1, 10]
+    classes:
+      type: string
+      shape: [-1, 1]
 monitoring:
   - name: Requests
     kind: CounterMetricSpec
     config:
-      "interval": 15
+      interval: 15
   - name: Latency
     kind: LatencyMetricSpec
     config:
-      "interval": 15
+      interval: 15
   - name: Autoencoder
     kind: ImageAEMetricSpec
     with-health: true
