@@ -56,16 +56,6 @@ def pipeline_definition(
     download.add_volume_mount(storage_volume_mount)
     download.add_env_variable(mount_path_env)
 
-    # # 1. Make a sample of production data for retraining
-    # download = dsl.ContainerOp(
-    #     name="sample",
-    #     image="tidylobster/mnist-pipeline-sampling:latest")     # <-- Replace with correct docker image
-    # download.add_volume(storage_volume)
-    # download.add_volume_mount(storage_volume_mount)
-    # download.add_env_variable(mount_path_env)
-    # download.add_env_variable(hydrosphere_address_env)
-    # download.add_env_variable(application_name_env)
-    
     # 2. Train and save a MNIST classifier using Tensorflow
     train = dsl.ContainerOp(
         name="train",

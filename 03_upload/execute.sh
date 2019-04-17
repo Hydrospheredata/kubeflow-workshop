@@ -19,7 +19,7 @@ payload:
 runtime: "hydrosphere/serving-runtime-tensorflow-1.13.1:latest"
 metadata: 
   learning_rate: "${LEARNING_RATE}"
-  num_steps: "${LEARNING_STEPS}"
+  epochs: "${EPOCHS}"
   batch_size: "${BATCH_SIZE}"
   accuracy: "${ACCURACY}"
 monitoring:
