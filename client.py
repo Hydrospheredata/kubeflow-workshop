@@ -1,7 +1,7 @@
 import kfp
 import namesgenerator
 
-client = kfp.Client("localhost:8889")  # ml-pipeline endpoint in kubeflow namespace
+client = kfp.Client("kubeflow.k8s.hydrosphere.io")
 experiment_name='MNIST Showreal'
 pipeline_filename = 'pipeline.tar.gz'
 run_name = namesgenerator.get_random_name()
