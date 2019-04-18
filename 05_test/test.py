@@ -38,5 +38,6 @@ if __name__ == "__main__":
         predicted.append(response.json()["class_ids"][0][0])
         time.sleep(requests_delay)
     
-    assert np.sum(labels == np.array(predicted)) / len(labels) > acceptable_accuracy, \
-        "Accuracy is not acceptable"
+    accuracy = np.sum(labels == np.array(predicted)) / len(labels)
+    assert accuracy > acceptable_accuracy, \
+        "Accuracy is not acceptable ({} < {})".format(accuracy, acceptable_accuracy)

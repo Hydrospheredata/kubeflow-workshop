@@ -9,7 +9,7 @@ def pipeline_definition(
     learning_rate="0.01",
     epochs="10",
     batch_size="256",
-    warmpup_count="100",
+    test_amount="100",
     model_name="mnist",
     application_name="mnist-app",
     signature_name="predict",
@@ -41,8 +41,8 @@ def pipeline_definition(
         name="EPOCHS", value="{{workflow.parameters.epochs}}")
     batch_size_env = k8s.V1EnvVar(
         name="BATCH_SIZE", value="{{workflow.parameters.batch-size}}")
-    warmup_count_env = k8s.V1EnvVar(
-        name="WARMUP_IMAGES_AMOUNT", value="{{workflow.parameters.warmpup-count}}")
+    test_amount_env = k8s.V1EnvVar(
+        name="TEST_AMOUNT_AMOUNT", value="{{workflow.parameters.test-amount}}")
     requests_delay_env = k8s.V1EnvVar(
         name="REQUESTS_DELAY", value="{{workflow.parameters.requests-delay}}")
     recurring_run_env = k8s.V1EnvVar(
@@ -117,7 +117,7 @@ def pipeline_definition(
     test.add_env_variable(hydrosphere_address_env)
     test.add_env_variable(application_name_env)
     test.add_env_variable(signature_name_env) 
-    test.add_env_variable(warmup_count_env)
+    test.add_env_variable(test_amount_env)
     test.add_env_variable(acceptable_accuracy_env)
     test.add_env_variable(requests_delay_env)
     test.add_env_variable(recurring_run_env)

@@ -1,9 +1,12 @@
-import kfp
+import kfp, sys
 import namesgenerator
+
+assert len(sys.argv) == 2, \
+    "You have to provide compiled pipeline resource as an argument."
 
 client = kfp.Client("kubeflow.k8s.hydrosphere.io")
 experiment_name='MNIST Showreal'
-pipeline_filename = 'pipeline.tar.gz'
+pipeline_filename = sys.argv[1]
 run_name = namesgenerator.get_random_name()
 
 try:
@@ -19,5 +22,8 @@ run_result = client.run_pipeline(
     {
         "hydrosphere-address": "https://dev.k8s.hydrosphere.io",
         "requests_delay": "2",
+
+        "reqstore-address": "dev.k8s.hydrosphere.io:443",
+        "recurring-run": "1",
     }
 )

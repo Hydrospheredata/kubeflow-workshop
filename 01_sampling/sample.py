@@ -19,17 +19,18 @@ def get_model_version_id(application_name):
 
 
 if __name__ == "__main__":
-    client = ReqstoreClient("dev.k8s.hydrosphere.io:443", False)
+    client = ReqstoreClient(reqstore_address, False)
     model_version_id = str(get_model_version_id(application_name))
 
-    conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+    conn = psycopg2.connect("postgresql://postgres:postgres@" \
+        "postgres-test-deployment.kubeflow.svc.cluster.local:5432/postgres")
     cur = conn.cursor()
 
     records = list(client.getRange(0, 1854897851804888100, model_version_id))
     random.shuffle(records)
 
     imgs, labels = list(), list()
-    for timestamp in records[:int(len(records) * 1)]:
+    for timestamp in records:
         for entry in timestamp.entries:
             cur.execute("SELECT * FROM requests WHERE timestamp=%s AND uid=%s", (timestamp.ts, entry.uid))
             db_record = cur.fetchone()
@@ -41,6 +42,9 @@ if __name__ == "__main__":
     imgs, labels = np.array(imgs), np.array(labels)
     train_imgs, train_labels = imgs[:int(len(imgs) * 0.75)], labels[:int(len(labels) * 0.75)]
     test_imgs, test_labels = imgs[int(len(imgs) * 0.75):], labels[int(len(labels) * 0.75):]
+
+    assert len(train_imgs) > 0, "Not enough training data"
+    assert len(test_imgs) > 0, "Not enough testing data"
 
     os.makedirs(data_path, exist_ok=True)
     print("New train subsample size: {}".format(str(len(train_imgs))), flush=True)

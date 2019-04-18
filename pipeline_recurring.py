@@ -5,11 +5,12 @@ import kubernetes.client.models as k8s
 @dsl.pipeline(name="mnist", description="MNIST classifier")
 def pipeline_definition(
     hydrosphere_address="{hydrosphere-instance-address}",  # <-- Replace with correct instance address
-    mount_path='/storage',
+    reqstore_address="{reqstore-address}",
+    mount_path="/storage",
     learning_rate="0.01",
     epochs="10",
     batch_size="256",
-    warmpup_count="100",
+    test_amount="100",
     model_name="mnist",
     application_name="mnist-app",
     signature_name="predict",
@@ -25,6 +26,8 @@ def pipeline_definition(
     
     hydrosphere_address_env = k8s.V1EnvVar(
         name="CLUSTER_ADDRESS", value="{{workflow.parameters.hydrosphere-address}}")
+    reqstore_address_env = k8s.V1EnvVar(
+        name="REQSTORE_ADDRESS", value="{{workflow.parameters.reqstore-address}}")
     mount_path_env = k8s.V1EnvVar(
         name="MOUNT_PATH", value="{{workflow.parameters.mount-path}}")
     model_name_env = k8s.V1EnvVar(
@@ -41,8 +44,8 @@ def pipeline_definition(
         name="EPOCHS", value="{{workflow.parameters.epochs}}")
     batch_size_env = k8s.V1EnvVar(
         name="BATCH_SIZE", value="{{workflow.parameters.batch-size}}")
-    warmup_count_env = k8s.V1EnvVar(
-        name="WARMUP_IMAGES_AMOUNT", value="{{workflow.parameters.warmpup-count}}")
+    test_amount_env = k8s.V1EnvVar(
+        name="TEST_AMOUNT", value="{{workflow.parameters.test-amount}}")
     requests_delay_env = k8s.V1EnvVar(
         name="REQUESTS_DELAY", value="{{workflow.parameters.requests-delay}}")
     recurring_run_env = k8s.V1EnvVar(
@@ -57,6 +60,7 @@ def pipeline_definition(
     sample.add_env_variable(mount_path_env)
     sample.add_env_variable(hydrosphere_address_env)
     sample.add_env_variable(application_name_env)
+    sample.add_env_variable(reqstore_address_env)
     
     # 2. Train and save a MNIST classifier using Tensorflow
     train = dsl.ContainerOp(
@@ -119,7 +123,7 @@ def pipeline_definition(
     test.add_env_variable(hydrosphere_address_env)
     test.add_env_variable(application_name_env)
     test.add_env_variable(signature_name_env) 
-    test.add_env_variable(warmup_count_env)
+    test.add_env_variable(test_amount_env)
     test.add_env_variable(acceptable_accuracy_env)
     test.add_env_variable(requests_delay_env)
     test.add_env_variable(recurring_run_env)
