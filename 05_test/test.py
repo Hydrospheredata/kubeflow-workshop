@@ -34,7 +34,7 @@ if __name__ == "__main__":
     data, labels = generate_data(data_path, test_file, test_amount)
     for index, image in enumerate(data):
         response = requests.post(url=service_link, json={'imgs': [image.tolist()]})
-        print("{} | {}%\n{}".format(str(index), str(index / len(data) * 100), response.text), flush=True)
+        print("{} | {}%\n{}".format(str(index), str(round(index / len(data) * 100)), response.text), flush=True)
         predicted.append(response.json()["class_ids"][0][0])
         time.sleep(requests_delay)
     

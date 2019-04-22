@@ -5,7 +5,6 @@ import kubernetes.client.models as k8s
 @dsl.pipeline(name="mnist", description="MNIST classifier")
 def pipeline_definition(
     hydrosphere_address="{hydrosphere-instance-address}",  # <-- Replace with correct instance address
-    reqstore_address="{reqstore-address}",
     mount_path="/storage",
     learning_rate="0.01",
     epochs="10",
@@ -26,8 +25,6 @@ def pipeline_definition(
     
     hydrosphere_address_env = k8s.V1EnvVar(
         name="CLUSTER_ADDRESS", value="{{workflow.parameters.hydrosphere-address}}")
-    reqstore_address_env = k8s.V1EnvVar(
-        name="REQSTORE_ADDRESS", value="{{workflow.parameters.reqstore-address}}")
     mount_path_env = k8s.V1EnvVar(
         name="MOUNT_PATH", value="{{workflow.parameters.mount-path}}")
     model_name_env = k8s.V1EnvVar(
@@ -60,7 +57,6 @@ def pipeline_definition(
     sample.add_env_variable(mount_path_env)
     sample.add_env_variable(hydrosphere_address_env)
     sample.add_env_variable(application_name_env)
-    sample.add_env_variable(reqstore_address_env)
     
     # 2. Train and save a MNIST classifier using Tensorflow
     train = dsl.ContainerOp(

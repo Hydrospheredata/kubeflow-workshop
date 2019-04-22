@@ -7,7 +7,11 @@ from hydro_serving_grpc.timemachine.reqstore_client import *
 
 application_name = os.environ.get("APPLICATION_NAME", "mnist-app")
 host_address = os.environ.get("CLUSTER_ADDRESS", "http://localhost")
-reqstore_address = os.environ.get("REQSTORE_ADDRESS", "http://localhost")
+namespace = urllib.parse.urlparse(host_address).netloc.split(".")[0]
+reqstore_address = urllib.parse.urljoin(host_address, "reqstore")
+postgres_host = os.environ.get("KUBERNETES_SERVICE_HOST", "localhost")
+postgres_host = postgres_host if postgres_host == "localhost" \
+    else "postgres.{}.svc.cluster.local".format(namespace)
 mount_path = os.environ.get("MOUNT_PATH", "./")
 data_path = os.path.join(mount_path, "data", "mnist")
 
@@ -19,18 +23,20 @@ def get_model_version_id(application_name):
 
 
 if __name__ == "__main__":
-    client = ReqstoreClient(reqstore_address, False)
+    client = ReqstoreHttpClient(reqstore_address)
+    # client = ReqstoreClient(reqstore_address, False)
     model_version_id = str(get_model_version_id(application_name))
 
-    conn = psycopg2.connect("postgresql://postgres:postgres@" \
-        "postgres-test-deployment.kubeflow.svc.cluster.local:5432/postgres")
+    conn = psycopg2.connect("postgresql://serving:hydro-serving@{}:5432/postgres".format(postgres_host))
     cur = conn.cursor()
 
-    records = list(client.getRange(0, 1854897851804888100, model_version_id))
+    records = list(
+        client.getRange(0, 1854897851804888100, model_version_id, limit=10000, reverse=False))
     random.shuffle(records)
 
     imgs, labels = list(), list()
     for timestamp in records:
+
         for entry in timestamp.entries:
             cur.execute("SELECT * FROM requests WHERE timestamp=%s AND uid=%s", (timestamp.ts, entry.uid))
             db_record = cur.fetchone()
