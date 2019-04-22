@@ -7,7 +7,6 @@ __pycache__/
 /**/other
 *.npz
 *.csv
-*.txt
 *.tar.gz
 *.db
 docker.sh
