@@ -23,6 +23,6 @@ run_result = client.run_pipeline(
         "hydrosphere-address": "http://f7fb8c1f.serving.odsc.k8s.hydrosphere.io",
         "requests_delay": "2",
         
-        "recurring-run": "1",
+        # "recurring-run": "1",
     }
 )
