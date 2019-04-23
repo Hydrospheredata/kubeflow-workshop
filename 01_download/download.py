@@ -2,6 +2,13 @@ from PIL import Image
 import struct, numpy
 import os, gzip, tarfile, shutil, glob
 import urllib, urllib.parse, urllib.request
+import datetime
+
+
+mount_path = os.environ.get("MOUNT_PATH", "./")
+timestamp = round(datetime.datetime.now().timestamp())
+data_path = os.path.join(mount_path, "data", "mnist", str(timestamp))
+pipeline_dataset_path = "/data_path.txt" if mount_path != "./" else "./data_path.txt"
 
 filenames = [
     'train-images-idx3-ubyte.gz',
@@ -53,21 +60,27 @@ def process_images(path, dataset):
         imgs = imgs.astype(numpy.float32) / 255.0
 
     os.remove(label_file); os.remove(img_file)
-    print("Saving files under {} path".format(os.path.join(path, dataset)), flush=True)
-    numpy.savez_compressed(os.path.join(path, dataset), imgs=imgs, labels=labels)
+    return imgs, labels
 
 
 def download_mnist(base_url, base_dir):
     """ Download original MNIST structs and pack them into numpy arrays """
 
     download_files(base_url, base_dir)
-    process_images(base_dir, "train")
-    process_images(base_dir, "t10k") 
+    train_imgs, train_labels = process_images(base_dir, "train")
+    test_imgs, test_labels = process_images(base_dir, "t10k") 
+
+    print("Saving train data under {}.npz path".format(os.path.join(base_dir, "train")), flush=True)
+    numpy.savez_compressed(os.path.join(base_dir, "train"), imgs=train_imgs, labels=train_labels)
+    
+    print("Saving test data under {}.npz path".format(os.path.join(base_dir, "test")), flush=True)
+    numpy.savez_compressed(os.path.join(base_dir, "test"), imgs=test_imgs, labels=test_labels)
+
 
 
 if __name__ == "__main__": 
-    mount_path = os.environ.get("MOUNT_PATH", "./")
-    data_path = os.path.join(mount_path, "data", "mnist")
-    download_mnist(
-        base_url="http://yann.lecun.com/exdb/mnist/",
-        base_dir=data_path)
+    download_mnist(base_dir=data_path, base_url="http://yann.lecun.com/exdb/mnist/")
+    
+    # Dump dataset location
+    with open(pipeline_dataset_path, "w+") as file:
+        file.write(data_path)

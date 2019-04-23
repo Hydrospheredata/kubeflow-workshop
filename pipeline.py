@@ -12,10 +12,8 @@ def pipeline_definition(
     test_amount="100",
     model_name="mnist",
     application_name="mnist-app",
-    signature_name="predict",
     acceptable_accuracy="0.90",
     requests_delay="4",
-    recurring_run="0",
 ):
     
     storage_pvc = k8s.V1PersistentVolumeClaimVolumeSource(claim_name="storage")
@@ -31,8 +29,6 @@ def pipeline_definition(
         name="MODEL_NAME", value="{{workflow.parameters.model-name}}")
     application_name_env = k8s.V1EnvVar(
         name="APPLICATION_NAME", value="{{workflow.parameters.application-name}}")
-    signature_name_env = k8s.V1EnvVar(
-        name="SIGNATURE_NAME", value="{{workflow.parameters.signature-name}}")
     acceptable_accuracy_env = k8s.V1EnvVar(
         name="ACCEPTABLE_ACCURACY", value="{{workflow.parameters.acceptable-accuracy}}")
     learning_rate_env = k8s.V1EnvVar(
@@ -49,7 +45,8 @@ def pipeline_definition(
     # 1. Download MNIST data
     download = dsl.ContainerOp(
         name="download",
-        image="tidylobster/mnist-pipeline-download:latest")     # <-- Replace with correct docker image
+        image="tidylobster/mnist-pipeline-download:latest",       # <-- Replace with correct docker image
+        file_outputs={"data_path": "/data_path.txt"})
     download.add_volume(storage_volume)
     download.add_volume_mount(storage_volume_mount)
     download.add_env_variable(mount_path_env)
@@ -58,10 +55,11 @@ def pipeline_definition(
     train = dsl.ContainerOp(
         name="train",
         image="tidylobster/mnist-pipeline-train:latest",        # <-- Replace with correct docker image
-        file_outputs={"accuracy": "/accuracy.txt"})
+        file_outputs={"accuracy": "/accuracy.txt"},
+        arguments=[download.outputs["data_path"]])
 
     train.after(download)
-    train.set_memory_request('2G')
+    train.set_memory_request('1G')
     train.set_cpu_request('1')
 
     train.add_volume(storage_volume)
@@ -70,14 +68,13 @@ def pipeline_definition(
     train.add_env_variable(learning_rate_env)
     train.add_env_variable(epochs_env)
     train.add_env_variable(batch_size_env)
-    train.add_env_variable(recurring_run_env)
 
     # 3. Upload trained model to the cluster
     upload = dsl.ContainerOp(
         name="upload",
         image="tidylobster/mnist-pipeline-upload:latest",         # <-- Replace with correct docker image
         file_outputs={"model-version": "/model-version.txt"},
-        arguments=[train.outputs["accuracy"]])
+        arguments=[train.outputs["accuracy"], download.outputs["data_path"]])
     upload.after(train)
     
     upload.add_volume(storage_volume) 
@@ -105,7 +102,7 @@ def pipeline_definition(
     test = dsl.ContainerOp(
         name="test",
         image="tidylobster/mnist-pipeline-test:latest",               # <-- Replace with correct docker image
-        arguments=[predeploy.outputs["predeploy-app-name"]])
+        arguments=[predeploy.outputs["predeploy-app-name"], download.outputs["data_path"]])
     test.set_retry(3)
     test.after(predeploy)
 
@@ -114,19 +111,9 @@ def pipeline_definition(
     test.add_env_variable(mount_path_env)
     test.add_env_variable(hydrosphere_address_env)
     test.add_env_variable(application_name_env)
-    test.add_env_variable(signature_name_env) 
     test.add_env_variable(test_amount_env)
     test.add_env_variable(acceptable_accuracy_env)
     test.add_env_variable(requests_delay_env)
-    test.add_env_variable(recurring_run_env)
-
-    # 6. Remove predeploy application
-    rm_predeploy = dsl.ContainerOp(
-        name="remove-predeploy",
-        image="tidylobster/mnist-pipeline-rm-predeploy:latest",    # <-- Replace with correct docker image  
-        arguments=[predeploy.outputs["predeploy-app-name"]])
-    rm_predeploy.after(test)
-    rm_predeploy.add_env_variable(hydrosphere_address_env)
 
     # 7. Deploy application
     deploy = dsl.ContainerOp(
@@ -142,4 +129,15 @@ def pipeline_definition(
 
 if __name__ == "__main__":
     import kfp.compiler as compiler
+    import subprocess, sys
+
+    namespace = "cc2645d0"
+    assert namespace is not None, "Assign a namespace variable"
+
     compiler.Compiler().compile(pipeline_definition, "pipeline.tar.gz")
+
+    untar = "tar -xvf pipeline.tar.gz"
+    replace = f"sed -i '' s/minio-service.kubeflow/minio-service.{namespace}/g pipeline.yaml"
+
+    process = subprocess.run(untar.split())
+    process = subprocess.run(replace.split())

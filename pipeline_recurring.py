@@ -48,10 +48,11 @@ def pipeline_definition(
     recurring_run_env = k8s.V1EnvVar(
         name="RECURRING_RUN", value="{{workflow.parameters.recurring-run}}")
 
-    # # 1. Make a sample of production data for retraining
+    # 1. Make a sample of production data for retraining
     sample = dsl.ContainerOp(
         name="sample",
-        image="tidylobster/mnist-pipeline-sampling:latest")     # <-- Replace with correct docker image
+        image="tidylobster/mnist-pipeline-sample:latest", # <-- Replace with correct docker image
+        file_outputs={"data_path": "/data_path.txt"})     
     sample.add_volume(storage_volume)
     sample.add_volume_mount(storage_volume_mount)
     sample.add_env_variable(mount_path_env)
@@ -62,10 +63,11 @@ def pipeline_definition(
     train = dsl.ContainerOp(
         name="train",
         image="tidylobster/mnist-pipeline-train:latest",        # <-- Replace with correct docker image
-        file_outputs={"accuracy": "/accuracy.txt"})
+        file_outputs={"accuracy": "/accuracy.txt"},
+        arguments=[sample.outputs["data_path"]])
 
     train.after(sample)
-    train.set_memory_request('2G')
+    train.set_memory_request('1G')
     train.set_cpu_request('1')
 
     train.add_volume(storage_volume)
@@ -124,14 +126,6 @@ def pipeline_definition(
     test.add_env_variable(requests_delay_env)
     test.add_env_variable(recurring_run_env)
 
-    # 6. Remove predeploy application
-    rm_predeploy = dsl.ContainerOp(
-        name="remove-predeploy",
-        image="tidylobster/mnist-pipeline-rm-predeploy:latest",    # <-- Replace with correct docker image  
-        arguments=[predeploy.outputs["predeploy-app-name"]])
-    rm_predeploy.after(test)
-    rm_predeploy.add_env_variable(hydrosphere_address_env)
-
     # 7. Deploy application
     deploy = dsl.ContainerOp(
         name="deploy",
@@ -146,4 +140,15 @@ def pipeline_definition(
 
 if __name__ == "__main__":
     import kfp.compiler as compiler
-    compiler.Compiler().compile(pipeline_definition, "pipeline-recurring.tar.gz")
+    import subprocess, sys
+
+    namespace = "cc2645d0"
+    assert namespace is not None, "Assign a namespace variable"
+
+    compiler.Compiler().compile(pipeline_definition, "pipeline.tar.gz")
+
+    untar = "tar -xvf pipeline.tar.gz"
+    replace = f"sed -i '' s/minio-service.kubeflow/minio-service.{namespace}/g pipeline.yaml"
+
+    process = subprocess.run(untar.split())
+    process = subprocess.run(replace.split())

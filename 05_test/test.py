@@ -3,14 +3,14 @@ import numpy as np
 
 host_address = os.environ.get("CLUSTER_ADDRESS", "http://localhost")
 application_name = os.environ.get("APPLICAITON_NAME", "mnist-app")
-application_name = sys.argv[1] if len(sys.argv) > 1 else application_name
+application_name = sys.argv[1]
 test_amount = int(os.environ.get("TEST_AMOUNT", 50))
 acceptable_accuracy = float(os.environ.get("ACCEPTABLE_ACCURACY", 0.90))
 requests_delay = float(os.environ.get("REQUEST_DELAY", 0.5))
 mount_path = os.environ.get("MOUNT_PATH", "./")
-data_path = os.path.join(mount_path, "data", "mnist")
+data_path = sys.argv[2]
 
-test_file = "t10k.npz"
+test_file = "test.npz"
 
 service_link = "{}/gateway/application/{}".format(host_address, application_name)
 print("Using URL :: {}".format(service_link), flush=True)

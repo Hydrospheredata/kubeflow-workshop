@@ -1,6 +1,7 @@
 import requests, psycopg2
 import pickle, os, random, urllib.parse
 import numpy as np
+import datetime
 from tensorflow import make_ndarray
 from hydro_serving_grpc.timemachine.reqstore_client import *
 
@@ -13,7 +14,9 @@ postgres_host = os.environ.get("KUBERNETES_SERVICE_HOST", "localhost")
 postgres_host = postgres_host if postgres_host == "localhost" \
     else "postgres.{}.svc.cluster.local".format(namespace)
 mount_path = os.environ.get("MOUNT_PATH", "./")
-data_path = os.path.join(mount_path, "data", "mnist")
+timestamp = round(datetime.datetime.now().timestamp())
+data_path = os.path.join(mount_path, "data", "mnist", str(timestamp))
+pipeline_dataset_path = "/data_path.txt" if mount_path != "./" else "./data_path.txt"
 
 
 def get_model_version_id(application_name):
@@ -30,10 +33,17 @@ if __name__ == "__main__":
     conn = psycopg2.connect("postgresql://serving:hydro-serving@{}:5432/postgres".format(postgres_host))
     cur = conn.cursor()
 
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS 
+            requests (timestamp bigint, uid integer, ground_truth integer);
+    ''')
+
+    print("Sample data from reqstore", flush=True)
     records = list(
         client.getRange(0, 1854897851804888100, model_version_id, limit=10000, reverse=False))
     random.shuffle(records)
 
+    print("Prepare dataset", flush=True)
     imgs, labels = list(), list()
     for timestamp in records:
 
@@ -53,10 +63,14 @@ if __name__ == "__main__":
     assert len(test_imgs) > 0, "Not enough testing data"
 
     os.makedirs(data_path, exist_ok=True)
-    print("New train subsample size: {}".format(str(len(train_imgs))), flush=True)
-    print("New test subsample size: {}".format(str(len(test_imgs))), flush=True)
+    print("Train subsample size: {}".format(str(len(train_imgs))), flush=True)
+    print("Test subsample size: {}".format(str(len(test_imgs))), flush=True)
     
     np.savez_compressed(
         os.path.join(data_path, "train"), imgs=train_imgs, labels=train_labels)
     np.savez_compressed(
-        os.path.join(data_path, "t10k"), imgs=test_imgs, labels=test_labels)
+        os.path.join(data_path, "test"), imgs=test_imgs, labels=test_labels)
+
+    # Dump dataset location
+    with open(pipeline_dataset_path, "w+") as file:
+        file.write(data_path)

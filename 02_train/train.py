@@ -1,14 +1,15 @@
-import os, json
+import os, json, sys
 import tensorflow as tf
 import numpy as np
 
+
 mount_path = os.environ.get("MOUNT_PATH", "./")
 models_path = os.path.join(mount_path, "models")
-data_path = os.path.join(mount_path, "data", "mnist")
+data_path = sys.argv[1]
 dev_env = int(os.environ.get("DEV_ENV", "0"))
 
 train_file = "train.npz"
-test_file = "t10k.npz"
+test_file = "test.npz"
 
 learning_rate = float(os.environ.get("LEARNING_RATE", 0.01))
 epochs = int(os.environ.get("EPOCHS", 10))

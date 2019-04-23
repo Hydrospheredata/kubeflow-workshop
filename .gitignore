@@ -9,4 +9,5 @@ __pycache__/
 *.csv
 *.tar.gz
 *.db
+*.yaml*
 docker.sh

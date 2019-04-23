@@ -9,6 +9,7 @@ cd $(ls -t | head -n1)
 
 # Get accuracy from the previous step
 export ACCURACY=$1
+export DATA_PATH=$2
 
 cat > serving.yaml << EOL
 kind: Model
@@ -18,6 +19,7 @@ metadata:
   epochs: "${EPOCHS}"
   batch_size: "${BATCH_SIZE}"
   accuracy: "${ACCURACY}"
+  data: "${DATA_PATH}"
 payload:
   - "saved_model.pb"
   - "variables/" 
