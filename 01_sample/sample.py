@@ -57,6 +57,6 @@ if __name__ == "__main__":
     print("New test subsample size: {}".format(str(len(test_imgs))), flush=True)
     
     np.savez_compressed(
-        os.path.join(data_path, "subsample-train"), imgs=train_imgs, labels=train_labels)
+        os.path.join(data_path, "train"), imgs=train_imgs, labels=train_labels)
     np.savez_compressed(
-        os.path.join(data_path, "subsample-test"), imgs=test_imgs, labels=test_labels)
+        os.path.join(data_path, "t10k"), imgs=test_imgs, labels=test_labels)

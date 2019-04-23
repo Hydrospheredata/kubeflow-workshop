@@ -45,8 +45,6 @@ def pipeline_definition(
         name="TEST_AMOUNT_AMOUNT", value="{{workflow.parameters.test-amount}}")
     requests_delay_env = k8s.V1EnvVar(
         name="REQUESTS_DELAY", value="{{workflow.parameters.requests-delay}}")
-    recurring_run_env = k8s.V1EnvVar(
-        name="RECURRING_RUN", value="{{workflow.parameters.recurring-run}}")
 
     # 1. Download MNIST data
     download = dsl.ContainerOp(

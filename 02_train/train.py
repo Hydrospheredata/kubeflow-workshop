@@ -6,14 +6,9 @@ mount_path = os.environ.get("MOUNT_PATH", "./")
 models_path = os.path.join(mount_path, "models")
 data_path = os.path.join(mount_path, "data", "mnist")
 dev_env = int(os.environ.get("DEV_ENV", "0"))
-recurring_run = int(os.environ.get("RECURRING_RUN", "0"))
 
-if recurring_run:
-    train_file = "subsample-train.npz"
-    test_file = "subsample-test.npz"
-else: 
-    train_file = "train.npz"
-    test_file = "t10k.npz"
+train_file = "train.npz"
+test_file = "t10k.npz"
 
 learning_rate = float(os.environ.get("LEARNING_RATE", 0.01))
 epochs = int(os.environ.get("EPOCHS", 10))
