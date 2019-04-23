@@ -115,7 +115,7 @@ def pipeline_definition(
     test.add_env_variable(acceptable_accuracy_env)
     test.add_env_variable(requests_delay_env)
 
-    # 7. Deploy application
+    # 6. Deploy application
     deploy = dsl.ContainerOp(
         name="deploy",
         image="tidylobster/mnist-pipeline-deploy:latest",              # <-- Replace with correct docker image
