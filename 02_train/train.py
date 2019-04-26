@@ -1,41 +1,66 @@
 import os, json, sys
 import tensorflow as tf
 import numpy as np
+import argparse
 
 
-mount_path = os.environ.get("MOUNT_PATH", "./")
-models_path = os.path.join(mount_path, "models")
-data_path = sys.argv[1]
-dev_env = int(os.environ.get("DEV_ENV", "0"))
-
-train_file = "train.npz"
-test_file = "test.npz"
-
-learning_rate = float(os.environ.get("LEARNING_RATE", 0.01))
-epochs = int(os.environ.get("EPOCHS", 10))
-batch_size = int(os.environ.get("BATCH_SIZE", 256))
-
-
-def input_fn(file, shuffle=True):
-    with np.load(os.path.join(data_path, file)) as data:
+def input_fn(path, batch_size=256, epochs=10):
+    with np.load(path) as data:
         imgs = data["imgs"]
         labels = data["labels"].astype(int)
-    return tf.estimator.inputs.numpy_input_fn(x={"imgs": imgs}, y=labels, 
-        shuffle=shuffle, batch_size=batch_size, num_epochs=epochs)
+    
+    return tf.estimator.inputs.numpy_input_fn(
+        x={"imgs": imgs}, y=labels, shuffle=True, batch_size=batch_size, num_epochs=epochs)
+
 
 if __name__ == "__main__":
     tf.logging.set_verbosity(tf.logging.INFO)
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument(
+        '--data-path', 
+        help='Path, where the current run\'s data was stored',
+        required=True)
+    parser.add_argument(
+        '--mount-path',
+        help='Path to PersistentVolumeClaim, deployed on the cluster',
+        required=True)
+    
+    parser.add_argument(
+        '--learning-rate', type=float, default=0.01)
+    parser.add_argument(
+        '--epochs', type=int, default=10)
+    parser.add_argument(
+        '--batch-size', type=int, default=256)
+    parser.add_argument(
+        '--dev', help="Flag for development purposes", type=bool, default=False)
+    
+    args = parser.parse_args()
+    arguments = args.__dict__
+
+    train_file = "train.npz"
+    test_file = "test.npz"
+    models_path = os.path.join(arguments["mount_path"], "models")
 
     # Prepare data inputs
     img_feature_column = tf.feature_column.numeric_column("imgs", shape=(28,28))
-    train_fn, test_fn = input_fn(train_file), input_fn(test_file)
-
+    
+    train_fn = input_fn(
+        path=os.path.join(arguments["data_path"], "train.npz"), 
+        batch_size=arguments["batch_size"], 
+        epochs=arguments["epochs"])
+    
+    test_fn = input_fn(
+        path=os.path.join(arguments["data_path"], "test.npz"), 
+        batch_size=arguments["batch_size"], 
+        epochs=arguments["epochs"])
+    
     # Create the model
     estimator = tf.estimator.DNNClassifier(
         n_classes=10,
         hidden_units=[256, 64],
         feature_columns=[img_feature_column],
-        optimizer=tf.train.AdamOptimizer(learning_rate=learning_rate))
+        optimizer=tf.train.AdamOptimizer(learning_rate=arguments["learning_rate"]))
 
     # Train and evaluate the model
     estimator.train(train_fn)
@@ -49,8 +74,8 @@ if __name__ == "__main__":
     estimator.export_savedmodel(models_path, serving_input_receiver_fn)
 
     # Perform metrics calculations
-    accuracy_file = "./accuracy.txt" if dev_env else "/accuracy.txt"
-    metrics_file = "./mlpipeline-metrics.json" if dev_env else "/mlpipeline-metrics.json"
+    accuracy_file = "./accuracy.txt" if arguments["dev"] else "/accuracy.txt"
+    metrics_file = "./mlpipeline-metrics.json" if arguments["dev"] else "/mlpipeline-metrics.json"
     
     metrics = {
         'metrics': [

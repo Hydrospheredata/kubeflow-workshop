@@ -1,5 +1,58 @@
+#!/bin/bash
+
+# Parse keyword arguments
+while [[ $# -gt 0 ]]; do
+  key="$1"
+
+  case $key in
+      --data-path)
+      DATA_PATH="$2"
+      shift # past argument
+      shift # past value
+      ;;
+      --mount-path)
+      MOUNT_PATH="$2"
+      shift # past argument
+      shift # past value
+      ;;
+      --accuracy)
+      ACCURACY="$2"
+      shift # past argument
+      shift # past value
+      ;;
+      --hydrosphere-address)
+      HYDROSPHERE_ADDRESS="$2"
+      shift # past argument
+      shift # past value
+      ;;
+      --learning-rate)
+      LEARNING_RATE="$2"
+      shift # past argument
+      shift # past value
+      ;;
+      --epochs)
+      EPOCHS="$2"
+      shift # past argument
+      shift # past value
+      ;;
+      --batch-size)
+      BATCH_SIZE="$2"
+      shift # past argument
+      shift # past value
+      ;;
+  esac
+done
+
+echo DATA PATH            = $DATA_PATH
+echo MOUNT PATH           = $MOUNT_PATH
+echo ACCURACY             = $ACCURACY
+echo HYDROSPHERE ADDRESS  = $HYDROSPHERE_ADDRESS
+echo LEARNING RATE        = $LEARNING_RATE
+echo EPOCHS               = $EPOCHS
+echo BATCH SIZE           = $BATCH_SIZE
+
 # Define where Hydrosphere Serving instance is running.
-hs cluster add --name serving --server $CLUSTER_ADDRESS
+hs cluster add --name serving --server $HYDROSPHERE_ADDRESS
 hs cluster use serving
 
 # By default tf.estimator.export_saved_model creates a folder with 
@@ -7,10 +60,7 @@ hs cluster use serving
 cd ${MOUNT_PATH}; cd models/
 cd $(ls -t | head -n1)
 
-# Get accuracy from the previous step
-export ACCURACY=$1
-export DATA_PATH=$2
-
+# Define contract for the model
 cat > serving.yaml << EOL
 kind: Model
 name: ${MODEL_NAME}

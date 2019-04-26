@@ -2,13 +2,8 @@ from PIL import Image
 import struct, numpy
 import os, gzip, tarfile, shutil, glob
 import urllib, urllib.parse, urllib.request
-import datetime
+import datetime, argparse
 
-
-mount_path = os.environ.get("MOUNT_PATH", "./")
-timestamp = round(datetime.datetime.now().timestamp())
-data_path = os.path.join(mount_path, "data", "mnist", str(timestamp))
-pipeline_dataset_path = "/data_path.txt" if mount_path != "./" else "./data_path.txt"
 
 filenames = [
     'train-images-idx3-ubyte.gz',
@@ -79,8 +74,25 @@ def download_mnist(base_url, base_dir):
 
 
 if __name__ == "__main__": 
-    download_mnist(base_dir=data_path, base_url="http://yann.lecun.com/exdb/mnist/")
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--mount-path',
+        help = 'Path to PersistentVolumeClaim, deployed on the cluster',
+        required = True
+    )
+
+    args = parser.parse_args()
+    arguments = args.__dict__
+
+    mount_path = arguments["mount_path"]
+    data_path = os.path.join(
+        mount_path, "data", "mnist", str(round(datetime.datetime.now().timestamp())))
+    pipeline_dataset_path = "/data_path.txt" if mount_path != "./" else "./data_path.txt"
+
+    download_mnist(
+        base_dir=data_path, 
+        base_url="http://yann.lecun.com/exdb/mnist/")
+
     # Dump dataset location
     with open(pipeline_dataset_path, "w+") as file:
         file.write(data_path)
