@@ -28,7 +28,7 @@ if __name__ == "__main__":
     arguments = args.__dict__
 
     requests_delay = 2
-    application_name = f"{arguments['model_name']}-app"
+    application_name = "{}-stage-app".format(arguments['model_name'])
     service_link = "{}/gateway/application/{}".format(
         arguments["hydrosphere_address"], application_name)
 

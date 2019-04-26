@@ -91,7 +91,7 @@ def pipeline_definition(
             "--data-path", download.outputs["data_path"],
             "--mount-path", mount_path,
             "--hydrosphere-address", hydrosphere_address,
-            "--acceptable-acuracy", acceptable_accuracy,
+            "--acceptable-accuracy", acceptable_accuracy,
             "--model-name", model_name, 
         ],
     )

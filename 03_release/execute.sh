@@ -15,6 +15,11 @@ while [[ $# -gt 0 ]]; do
       shift # past argument
       shift # past value
       ;;
+      --model-name)
+      MODEL_NAME="$2"
+      shift # past argument
+      shift # past value
+      ;;
       --accuracy)
       ACCURACY="$2"
       shift # past argument
@@ -45,6 +50,7 @@ done
 
 echo DATA PATH            = $DATA_PATH
 echo MOUNT PATH           = $MOUNT_PATH
+echo MODEL NAME           = $MODEL_NAME
 echo ACCURACY             = $ACCURACY
 echo HYDROSPHERE ADDRESS  = $HYDROSPHERE_ADDRESS
 echo LEARNING RATE        = $LEARNING_RATE
