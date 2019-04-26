@@ -57,6 +57,7 @@ def pipeline_definition(
         arguments=[
             "--data-path", download.outputs["data_path"],
             "--mount-path", mount_path,
+            "--model-name", model_name,
             "--accuracy", train.outputs["accuracy"],
             "--hydrosphere-address", hydrosphere_address,
             "--learning-rate", learning_rate,
