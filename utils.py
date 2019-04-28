@@ -30,7 +30,7 @@ def simulate_production_traffic(host=None, request_delay=2, request_amount=10000
 
     cur.execute('''
         CREATE TABLE IF NOT EXISTS 
-            requests (timestamp bigint, uid integer, ground_truth integer, model_version_id integer);
+            requests (timestamp bigint, uid integer, ground_truth integer);
     ''')
 
     if not host:
