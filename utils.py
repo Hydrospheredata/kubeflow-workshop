@@ -8,7 +8,7 @@ import hydro_serving_grpc as hs
 USER = "serving"
 PASS = "hydro-serving"
 PORT = "5432"
-ADDRESS = "localhost"
+ADDRESS = "postgres"
 DATABASE = "postgres"
 
 
