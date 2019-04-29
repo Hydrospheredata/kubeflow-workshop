@@ -4,5 +4,5 @@ psycopg2-binary==2.7.5
 Pillow==5.2.0
 numpy==1.16.2
 requests==2.21.0
-hydro-serving-grpc==2.0.3
 tqdm==4.23.0
+hydrosdk==2.0.0rc8

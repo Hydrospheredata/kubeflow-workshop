@@ -5,4 +5,5 @@ RUN pip install \
     requests==2.21.0 \
     psycopg2-binary==2.7.5 \
     hydro-serving-grpc \
-    hs
+    hs \
+    hydrosdk==2.0.0rc8
