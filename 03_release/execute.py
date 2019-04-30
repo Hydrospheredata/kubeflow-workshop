@@ -50,6 +50,7 @@ if __name__ == "__main__":
     monitoring = [
         sdk.Monitoring('Requests').with_spec('CounterMetricSpec', interval = 15),
         sdk.Monitoring('Latency').with_spec('LatencyMetricSpec', interval = 15),
+        sdk.Monitiring('Accuracy').with_spec('AccuracyMetricSpec'),
         sdk.Monitoring('Autoencoder').with_health(True).with_spec('ImageAEMetricSpec', threshold=0.15, application='mnist-concept-app')
     ]
 
