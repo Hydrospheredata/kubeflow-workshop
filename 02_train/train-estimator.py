@@ -4,11 +4,7 @@ import numpy as np
 import argparse
 
 
-def input_fn(path, batch_size=256, epochs=10):
-    with np.load(path) as data:
-        imgs = data["imgs"]
-        labels = data["labels"].astype(int)
-    
+def input_fn(imgs, labels, batch_size=256, epochs=10):
     return tf.estimator.inputs.numpy_input_fn(
         x={"imgs": imgs}, y=labels, shuffle=True, batch_size=batch_size, num_epochs=epochs)
 
@@ -38,26 +34,32 @@ if __name__ == "__main__":
     args = parser.parse_args()
     arguments = args.__dict__
 
-    train_file = "train.npz"
-    test_file = "test.npz"
     models_path = os.path.join(arguments["mount_path"], "models")
 
     # Prepare data inputs
+    with np.load(os.path.join(arguments["data_path"], "train.npz")) as data:
+        train_imgs = data["imgs"]
+        train_labels = data["labels"].astype(int)
+    
+    with np.load(os.path.join(arguments["data_path"], "test.npz")) as data:
+        test_imgs = data["imgs"]
+        test_labels = data["labels"].astype(int)
+
     img_feature_column = tf.feature_column.numeric_column("imgs", shape=(28,28))
     
     train_fn = input_fn(
-        path=os.path.join(arguments["data_path"], "train.npz"), 
+        train_imgs, train_labels, 
         batch_size=arguments["batch_size"], 
         epochs=arguments["epochs"])
     
     test_fn = input_fn(
-        path=os.path.join(arguments["data_path"], "test.npz"), 
+        test_imgs, test_labels,
         batch_size=arguments["batch_size"], 
         epochs=arguments["epochs"])
     
     # Create the model
     estimator = tf.estimator.DNNClassifier(
-        n_classes=10,
+        n_classes=len(np.unique(np.hstack([train_labels, test_labels]))),
         hidden_units=[256, 64],
         feature_columns=[img_feature_column],
         optimizer=tf.train.AdamOptimizer(learning_rate=arguments["learning_rate"]))

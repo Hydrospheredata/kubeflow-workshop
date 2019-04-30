@@ -117,6 +117,8 @@ monitoring:
       application: mnist-concept-app
   - name: Accuracy
     kind: AccuracyMetricSpec
+    config: 
+      threshold: 15
 EOL
 
 # i.  Upload the model to Hydrosphere Serving

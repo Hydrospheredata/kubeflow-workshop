@@ -4,5 +4,6 @@ RUN pip install \
     Pillow==5.2.0 \
     requests==2.21.0 \
     psycopg2-binary==2.7.5 \
+    Keras==2.2.0 \
     hydro-serving-grpc \
     hs
