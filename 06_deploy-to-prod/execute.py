@@ -12,10 +12,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     arguments = args.__dict__
 
-    app_name = '{}-app'.format(arguments['model-name'])
-    model = '{}:{}'.format(arguments['model-name'], arguments['model-version'])
+    app_name = '{}-app'.format(arguments['model_name'])
+    model = '{}:{}'.format(arguments['model_name'], arguments['model_version'])
 
     application = sdk.Application.singular(app_name, model)
 
-    result = application.apply(arguments['hydrosphere-address'])
+    result = application.apply(arguments['hydrosphere_address'])
     print(result)

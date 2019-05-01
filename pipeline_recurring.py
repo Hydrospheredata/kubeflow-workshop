@@ -8,7 +8,7 @@ def pipeline_definition(
     hydrosphere_address,
     mount_path="/storage",
     learning_rate="0.0005",
-    epochs="20",
+    epochs="3",
     batch_size="256",
     model_name="mnist",
     acceptable_accuracy="0.50",
@@ -37,7 +37,10 @@ def pipeline_definition(
     train = dsl.ContainerOp(
         name="train",
         image="tidylobster/mnist-pipeline-train:latest",        # <-- Replace with correct docker image
-        file_outputs={"accuracy": "/accuracy.txt"},
+        file_outputs={
+            "accuracy": "/accuracy.txt",
+            "model_path": "/model_path.txt",
+        },
         command=[
             "python", "train-resnet.py",
             "--data-path", sample.outputs["data_path"], 
@@ -63,6 +66,7 @@ def pipeline_definition(
             "--data-path", sample.outputs["data_path"],
             "--mount-path", mount_path,
             "--model-name", model_name,
+            "--model-path", train.outputs["model_path"],
             "--accuracy", train.outputs["accuracy"],
             "--hydrosphere-address", hydrosphere_address,
             "--learning-rate", learning_rate,

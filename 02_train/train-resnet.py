@@ -57,15 +57,15 @@ if __name__ == "__main__":
 
     # Train the model 
     history = model.fit(
-        X_train[:5000], Y_train[:5000], 
+        X_train, Y_train, 
         epochs=arguments["epochs"], 
         batch_size=arguments["batch_size"], 
-        validation_data=(X_test[:1000], Y_test[:1000]))
+        validation_data=(X_test, Y_test))
     accuracy = history.history["val_acc"][-1]
     
     imgs = graph.get_tensor_by_name("input_1:0")
     probabilities = graph.get_tensor_by_name("dense_1/Softmax:0")
-    class_ids = tf.argmax(probabilities, 1)
+    class_ids = tf.expand_dims(tf.argmax(probabilities, 1), 1)
 
     # Export the model 
     signature_map = {

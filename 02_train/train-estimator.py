@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # Export the model 
     serving_input_receiver_fn = tf.estimator \
         .export.build_raw_serving_input_receiver_fn(
-            {"imgs": tf.placeholder(tf.float32, shape=(None, 28, 28))})
+            {"imgs": tf.placeholder(tf.float32, shape=(None, 28, 28, 1))})
     model_save_path = estimator.export_savedmodel(models_path, serving_input_receiver_fn)
     model_save_path = model_save_path.decode()
 

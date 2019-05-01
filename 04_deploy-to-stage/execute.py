@@ -14,12 +14,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     arguments = args.__dict__
 
-    app_name = '{}-{}-app'.format(arguments['model-name'], POSTFIX)
+    app_name = '{}-{}-app'.format(arguments['model_name'], POSTFIX)
     with open('/stage-app-name.txt', 'w') as f:
         f.write(app_name)
-    model = '{}:{}'.format(arguments['model-name'], arguments['model-version'])
+    model = '{}:{}'.format(arguments['model_name'], arguments['model_version'])
 
     application = sdk.Application.singular(app_name, model)
 
-    result = application.apply(arguments['hydrosphere-address'])
+    result = application.apply(arguments['hydrosphere_address'])
     print(result)

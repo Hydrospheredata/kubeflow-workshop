@@ -20,6 +20,11 @@ while [[ $# -gt 0 ]]; do
       shift # past argument
       shift # past value
       ;;
+      --model-path)
+      MODEL_PATH="$2"
+      shift # past argument
+      shift # past value
+      ;;
       --accuracy)
       ACCURACY="$2"
       shift # past argument
@@ -61,10 +66,7 @@ echo BATCH SIZE           = $BATCH_SIZE
 hs cluster add --name serving --server $HYDROSPHERE_ADDRESS
 hs cluster use serving
 
-# By default tf.estimator.export_saved_model creates a folder with 
-# timestamp name, when the model will be saved. `cd` to that folder.
-cd ${MOUNT_PATH}; cd models/
-cd $(ls -t | head -n1)
+cd ${MODEL_PATH}
 
 # Define contract for the model
 cat > serving.yaml << EOL
@@ -85,7 +87,7 @@ contract:
   inputs:
     imgs:
       type: float32
-      shape: [-1, 28, 28]
+      shape: [-1, 28, 28, 1]
       profile: image
   outputs:
     probabilities:

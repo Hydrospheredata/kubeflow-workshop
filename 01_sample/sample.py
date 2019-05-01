@@ -65,7 +65,7 @@ if __name__ == "__main__":
             db_record = cur.fetchone()
 
             if not db_record: continue    
-            request_image = make_ndarray(entry.request.inputs["imgs"]).reshape(28*28)
+            request_image = make_ndarray(entry.request.inputs["imgs"]).reshape((28, 28))
             imgs.append(request_image); labels.append(db_record[2])
 
     if not imgs:
@@ -90,6 +90,8 @@ if __name__ == "__main__":
         mnist_imgs = data["imgs"]
         mnist_labels = data["labels"]
 
+    print(notmnist_imgs.shape, mnist_imgs.shape, train_imgs.shape, test_imgs.shape)
+    print(notmnist_labels.shape, mnist_labels.shape, train_labels.shape, test_labels.shape)
     new_images = np.vstack([notmnist_imgs, mnist_imgs, train_imgs, test_imgs])
     new_labels = np.hstack([notmnist_labels, mnist_labels, train_labels, test_labels])
     
@@ -99,10 +101,11 @@ if __name__ == "__main__":
     new_labels = new_labels[permute]
     
     # Make train/test split
-    train_imgs = new_images[:int(len(new_images) * 0.75)]
-    train_labels = new_labels[:int(len(new_labels) * 0.75)]
-    test_imgs = new_images[int(len(new_images) * 0.75):]
-    test_labels = new_labels[int(len(new_labels) * 0.75):]
+    
+    train_imgs = new_images[:2000]
+    train_labels = new_labels[:2000]
+    test_imgs = new_images[2000:1000]
+    test_labels = new_labels[2000:1000]
 
     print("Train subsample size: {}".format(str(len(train_imgs))), flush=True)
     print("Test subsample size: {}".format(str(len(test_imgs))), flush=True)

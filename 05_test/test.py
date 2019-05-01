@@ -40,7 +40,8 @@ if __name__ == "__main__":
 
     data, labels = generate_data(arguments["data_path"], "test.npz", test_amount=100)
     for index, image in enumerate(data):
-        response = requests.post(url=service_link, json={'imgs': [image.reshape(1, 28, 28, 1).tolist()]})
+        image = image.reshape((1, 28, 28, 1))
+        response = requests.post(url=service_link, json={'imgs': [image.tolist()]})
         print("{} | {}%\n{}".format(str(index), str(round(index / len(data) * 100)), response.text), flush=True)
         predicted.append(response.json()["class_ids"][0][0])
         time.sleep(requests_delay)
