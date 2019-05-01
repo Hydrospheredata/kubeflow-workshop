@@ -23,7 +23,7 @@ This will create two files for you: `pipeline.yaml` and `pipeline.tar.gz`. You c
 
 - (Recommended) Kubeflow Pipelines
     - UI
-        1. Open Kubeflow UI and upload `pipeline.tar.gz` with `Upload Workflow` button
+        1. Open Kubeflow UI and upload `pipeline.yaml` with `Upload Workflow` button
         1. Create an experiment and make a run using this pipeline
     - Shell
         1. Adjust `client.py` as needed: 1) specify compiled pipeline definition; 2) specify ml-pipeline endpoint; 3) specify experiment name.
