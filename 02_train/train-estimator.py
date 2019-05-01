@@ -4,13 +4,10 @@ import numpy as np
 import argparse
 
 
-def input_fn(path, batch_size=256, epochs=10):
-    with np.load(path) as data:
-        imgs = data["imgs"]
-        labels = data["labels"].astype(int)
-    
+def input_fn(imgs, labels, batch_size=256, epochs=10):
     return tf.estimator.inputs.numpy_input_fn(
-        x={"imgs": imgs}, y=labels, shuffle=True, batch_size=batch_size, num_epochs=epochs)
+        x={"imgs": imgs.reshape((len(imgs), 28, 28, 1))}, 
+        y=labels, shuffle=True, batch_size=batch_size, num_epochs=epochs)
 
 
 if __name__ == "__main__":
@@ -38,26 +35,32 @@ if __name__ == "__main__":
     args = parser.parse_args()
     arguments = args.__dict__
 
-    train_file = "train.npz"
-    test_file = "test.npz"
     models_path = os.path.join(arguments["mount_path"], "models")
 
     # Prepare data inputs
-    img_feature_column = tf.feature_column.numeric_column("imgs", shape=(28,28))
+    with np.load(os.path.join(arguments["data_path"], "train.npz")) as data:
+        train_imgs = data["imgs"]
+        train_labels = data["labels"].astype(int)
+    
+    with np.load(os.path.join(arguments["data_path"], "test.npz")) as data:
+        test_imgs = data["imgs"]
+        test_labels = data["labels"].astype(int)
+
+    img_feature_column = tf.feature_column.numeric_column("imgs", shape=(28,28, 1))
     
     train_fn = input_fn(
-        path=os.path.join(arguments["data_path"], "train.npz"), 
+        train_imgs, train_labels, 
         batch_size=arguments["batch_size"], 
         epochs=arguments["epochs"])
     
     test_fn = input_fn(
-        path=os.path.join(arguments["data_path"], "test.npz"), 
+        test_imgs, test_labels,
         batch_size=arguments["batch_size"], 
         epochs=arguments["epochs"])
     
     # Create the model
     estimator = tf.estimator.DNNClassifier(
-        n_classes=10,
+        n_classes=len(np.unique(np.hstack([train_labels, test_labels]))),
         hidden_units=[256, 64],
         feature_columns=[img_feature_column],
         optimizer=tf.train.AdamOptimizer(learning_rate=arguments["learning_rate"]))
@@ -71,12 +74,19 @@ if __name__ == "__main__":
     serving_input_receiver_fn = tf.estimator \
         .export.build_raw_serving_input_receiver_fn(
             {"imgs": tf.placeholder(tf.float32, shape=(None, 28, 28))})
-    estimator.export_savedmodel(models_path, serving_input_receiver_fn)
+    model_save_path = estimator.export_savedmodel(models_path, serving_input_receiver_fn)
+    model_save_path = model_save_path.decode()
 
     # Perform metrics calculations
-    accuracy_file = "./accuracy.txt" if arguments["dev"] else "/accuracy.txt"
-    metrics_file = "./mlpipeline-metrics.json" if arguments["dev"] else "/mlpipeline-metrics.json"
-    
+    if arguments["dev"]: 
+        accuracy_file = "./accuracy.txt"
+        metrics_file = "./mlpipeline-metrics.json"
+        model_path = "./model_path.txt"
+    else: 
+        accuracy_file = "/accuracy.txt"
+        metrics_file = "/mlpipeline-metrics.json"
+        model_path = "/model_path.txt"
+
     metrics = {
         'metrics': [
             {
@@ -96,4 +106,7 @@ if __name__ == "__main__":
     
     with open(metrics_file, "w+") as file:
         json.dump(metrics, file)
+
+    with open(model_path, "w+") as file:
+        file.write(model_save_path)
     

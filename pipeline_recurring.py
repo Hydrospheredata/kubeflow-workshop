@@ -1,16 +1,17 @@
 import kfp.dsl as dsl 
 import kubernetes.client.models as k8s
+import argparse
 
 
 @dsl.pipeline(name="mnist", description="MNIST classifier")
 def pipeline_definition(
     hydrosphere_address,
     mount_path="/storage",
-    learning_rate="0.01",
-    epochs="10",
+    learning_rate="0.0005",
+    epochs="20",
     batch_size="256",
     model_name="mnist",
-    acceptable_accuracy="0.90",
+    acceptable_accuracy="0.50",
 ):
     
     storage_pvc = k8s.V1PersistentVolumeClaimVolumeSource(claim_name="storage")
@@ -26,6 +27,7 @@ def pipeline_definition(
         arguments=[
             "--mount-path", mount_path, 
             "--hydrosphere-address", hydrosphere_address,
+            "--model-name", model_name,
         ],
     )     
     sample.add_volume(storage_volume)
@@ -36,7 +38,8 @@ def pipeline_definition(
         name="train",
         image="tidylobster/mnist-pipeline-train:latest",        # <-- Replace with correct docker image
         file_outputs={"accuracy": "/accuracy.txt"},
-        arguments=[
+        command=[
+            "python", "train-resnet.py",
             "--data-path", sample.outputs["data_path"], 
             "--mount-path", mount_path,
             "--learning-rate", learning_rate,

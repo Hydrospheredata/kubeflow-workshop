@@ -1,4 +1,8 @@
-FROM tidylobster/odsc-base:1.0
-ADD ./train.py /src/
+FROM hydrosphere/odsc-workshop-base:latest
+
+ADD ./train-estimator.py /src/
+ADD ./train-resnet.py /src/
+ADD ./resnet.py /src/
+
 WORKDIR /src/
-ENTRYPOINT [ "python", "train.py" ]
+CMD [ "python", "train-resnet.py" ]
