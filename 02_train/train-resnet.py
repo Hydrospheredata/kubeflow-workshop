@@ -56,12 +56,15 @@ if __name__ == "__main__":
               metrics=['accuracy'])
 
     # Train the model 
-    history = model.fit(
-        X_train, Y_train, 
-        epochs=arguments["epochs"], 
-        batch_size=arguments["batch_size"], 
-        validation_data=(X_test, Y_test))
-    accuracy = history.history["val_acc"][-1]
+    # history = model.fit(
+    #     X_train, Y_train, 
+    #     epochs=arguments["epochs"], 
+    #     batch_size=arguments["batch_size"], 
+    #     validation_data=(X_test, Y_test))
+    # accuracy = history.history["val_acc"][-1]
+
+    print(model.outputs)
+    import sys; sys.exit()
     
     imgs = graph.get_tensor_by_name("input_1:0")
     probabilities = graph.get_tensor_by_name("dense_1/Softmax:0")

@@ -102,10 +102,10 @@ if __name__ == "__main__":
     
     # Make train/test split
     
-    train_imgs = new_images[:2000]
-    train_labels = new_labels[:2000]
-    test_imgs = new_images[2000:1000]
-    test_labels = new_labels[2000:1000]
+    train_imgs = new_images[:int(len(new_images) * 0.75)]
+    train_labels = new_labels[:int(len(new_images) * 0.75)]
+    test_imgs = new_images[int(len(new_images) * 0.75):]
+    test_labels = new_labels[int(len(new_images) * 0.75):]
 
     print("Train subsample size: {}".format(str(len(train_imgs))), flush=True)
     print("Test subsample size: {}".format(str(len(test_imgs))), flush=True)
