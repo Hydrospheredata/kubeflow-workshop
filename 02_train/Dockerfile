@@ -5,4 +5,4 @@ ADD ./train-resnet.py /src/
 ADD ./resnet.py /src/
 
 WORKDIR /src/
-ENTRYPOINT [ "python", "train-resnet.py" ]
+CMD [ "python", "train-resnet.py" ]

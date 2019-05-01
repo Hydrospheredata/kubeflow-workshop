@@ -57,15 +57,15 @@ if __name__ == "__main__":
 
     # Train the model 
     history = model.fit(
-        X_train[:200], Y_train[:200], 
+        X_train[:5000], Y_train[:5000], 
         epochs=arguments["epochs"], 
         batch_size=arguments["batch_size"], 
-        validation_data=(X_test[:200], Y_test[:200]))
+        validation_data=(X_test[:1000], Y_test[:1000]))
     accuracy = history.history["val_acc"][-1]
     
     imgs = graph.get_tensor_by_name("input_1:0")
     probabilities = graph.get_tensor_by_name("dense_1/Softmax:0")
-    class_ids = tf.argmax(probabilities)
+    class_ids = tf.argmax(probabilities, 1)
 
     # Export the model 
     signature_map = {
@@ -81,6 +81,7 @@ if __name__ == "__main__":
     timestamp = round(datetime.datetime.now().timestamp())
     model_save_path = os.path.join(models_path, str(timestamp))
     print(model_save_path)  
+    
     builder = tf.saved_model.builder.SavedModelBuilder(model_save_path)
     builder.add_meta_graph_and_variables(
         sess=sess,                                          # session, where the graph was initialized

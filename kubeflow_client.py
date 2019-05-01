@@ -31,10 +31,6 @@ except:
 result = client.run_pipeline(
     experiment_id, run_name, arguments["file"],
     {
-        "learning-rate": "0.01",
-        "batch-size": "256",
-        "epochs": "10",
         "hydrosphere-address": f"http://{arguments['namespace']}.serving.odsc.k8s.hydrosphere.io",
-        "acceptable-accuracy": "0.90",
     }
 )

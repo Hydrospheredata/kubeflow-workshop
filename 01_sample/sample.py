@@ -104,7 +104,6 @@ if __name__ == "__main__":
     test_imgs = new_images[int(len(new_images) * 0.75):]
     test_labels = new_labels[int(len(new_labels) * 0.75):]
 
-    os.makedirs(data_path, exist_ok=True)
     print("Train subsample size: {}".format(str(len(train_imgs))), flush=True)
     print("Test subsample size: {}".format(str(len(test_imgs))), flush=True)
     

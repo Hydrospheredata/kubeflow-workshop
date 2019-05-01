@@ -6,7 +6,8 @@ import argparse
 
 def input_fn(imgs, labels, batch_size=256, epochs=10):
     return tf.estimator.inputs.numpy_input_fn(
-        x={"imgs": imgs}, y=labels, shuffle=True, batch_size=batch_size, num_epochs=epochs)
+        x={"imgs": imgs.reshape((len(imgs), 28, 28, 1))}, 
+        y=labels, shuffle=True, batch_size=batch_size, num_epochs=epochs)
 
 
 if __name__ == "__main__":
@@ -45,7 +46,7 @@ if __name__ == "__main__":
         test_imgs = data["imgs"]
         test_labels = data["labels"].astype(int)
 
-    img_feature_column = tf.feature_column.numeric_column("imgs", shape=(28,28))
+    img_feature_column = tf.feature_column.numeric_column("imgs", shape=(28,28, 1))
     
     train_fn = input_fn(
         train_imgs, train_labels, 
@@ -73,12 +74,19 @@ if __name__ == "__main__":
     serving_input_receiver_fn = tf.estimator \
         .export.build_raw_serving_input_receiver_fn(
             {"imgs": tf.placeholder(tf.float32, shape=(None, 28, 28))})
-    estimator.export_savedmodel(models_path, serving_input_receiver_fn)
+    model_save_path = estimator.export_savedmodel(models_path, serving_input_receiver_fn)
+    model_save_path = model_save_path.decode()
 
     # Perform metrics calculations
-    accuracy_file = "./accuracy.txt" if arguments["dev"] else "/accuracy.txt"
-    metrics_file = "./mlpipeline-metrics.json" if arguments["dev"] else "/mlpipeline-metrics.json"
-    
+    if arguments["dev"]: 
+        accuracy_file = "./accuracy.txt"
+        metrics_file = "./mlpipeline-metrics.json"
+        model_path = "./model_path.txt"
+    else: 
+        accuracy_file = "/accuracy.txt"
+        metrics_file = "/mlpipeline-metrics.json"
+        model_path = "/model_path.txt"
+
     metrics = {
         'metrics': [
             {
@@ -98,4 +106,7 @@ if __name__ == "__main__":
     
     with open(metrics_file, "w+") as file:
         json.dump(metrics, file)
+
+    with open(model_path, "w+") as file:
+        file.write(model_save_path)
     

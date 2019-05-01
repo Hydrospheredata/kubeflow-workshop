@@ -33,8 +33,12 @@ def pipeline_definition(
     train = dsl.ContainerOp(
         name="train",
         image="tidylobster/mnist-pipeline-train:latest",        # <-- Replace with correct docker image
-        file_outputs={"accuracy": "/accuracy.txt"},
-        arguments=[
+        file_outputs={
+            "accuracy": "/accuracy.txt",
+            "model_path": "/model_path.txt",
+        },
+        command=[
+            "python", "train-estimator.py",
             "--data-path", download.outputs["data_path"], 
             "--mount-path", mount_path,
             "--learning-rate", learning_rate,
