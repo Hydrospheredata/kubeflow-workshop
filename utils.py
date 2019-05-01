@@ -17,7 +17,7 @@ def generate_data(base_path, test_file, shuffle=False):
     with np.load(os.path.join(base_path, test_file)) as data:
         imgs, labels = data["imgs"], data["labels"]
         assert len(imgs) == len(labels)
-    
+    imgs = np.reshape(imgs, (len(imgs), 28, 28, 1))
     if shuffle:
         permute = np.random.permutation(len(imgs))
         return imgs[permute], labels[permute]
@@ -46,7 +46,8 @@ def simulate_production_traffic(host=None, request_delay=2, request_amount=10000
     tensor_shape = hs.TensorShapeProto(dim=[
         hs.TensorShapeProto.Dim(size=1),
         hs.TensorShapeProto.Dim(size=28),
-        hs.TensorShapeProto.Dim(size=28)
+        hs.TensorShapeProto.Dim(size=28),
+        hs.TensorShapeProto.Dim(size=1),
     ])
 
     images, labels = generate_data('/data', file, shuffle=shuffle)
