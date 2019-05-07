@@ -1,7 +1,7 @@
 tensorflow==1.13.1
 psycopg2-binary==2.7.5
 Pillow==5.2.0
-numpy==1.16.2
+numpy==1.15.4
 requests==2.21.0
 tqdm==4.23.0
 hydrosdk==2.0.0rc8
