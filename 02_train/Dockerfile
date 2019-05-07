@@ -1,8 +1,6 @@
-FROM hydrosphere/odsc-workshop-base:latest
+FROM hydrosphere/odsc-workshop-base:v1
 
-ADD ./train-estimator.py /src/
-ADD ./train-resnet.py /src/
-ADD ./resnet.py /src/
+ADD ./train.py /src/
 
 WORKDIR /src/
-CMD [ "python", "train-resnet.py" ]
+ENTRYPOINT [ "python", "train.py" ]

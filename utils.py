@@ -24,7 +24,7 @@ def generate_data(base_path, test_file, shuffle=False):
     return imgs, labels
 
 
-def simulate_production_traffic(host=None, request_delay=2, request_amount=10000, file="combined.npz", shuffle=False):
+def simulate_production_traffic(host=None, request_delay=0.5, request_amount=10000, file="combined.npz", shuffle=False):
     conn = psycopg2.connect(f"postgresql://{USER}:{PASS}@{ADDRESS}:{PORT}/{DATABASE}")
     cur = conn.cursor()
 

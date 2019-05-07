@@ -1,7 +1,6 @@
-FROM hydrosphere/odsc-workshop-base:latest
-ADD ./sample.py /src/
-WORKDIR /src/
+FROM hydrosphere/odsc-workshop-base:v1
 
-COPY notmnist.npz .
-COPY t10k.npz . 
+ADD ./sample.py /src/
+
+WORKDIR /src/
 ENTRYPOINT [ "python", "sample.py" ]

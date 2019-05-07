@@ -1,6 +1,7 @@
-import kfp.dsl as dsl 
-import kubernetes.client.models as k8s
 import argparse
+import kfp.dsl as dsl 
+from kfp.aws import use_aws_secret
+import kubernetes.client.models as k8s
 
 
 @dsl.pipeline(name="mnist", description="MNIST classifier")
@@ -8,119 +9,99 @@ def pipeline_definition(
     hydrosphere_address,
     mount_path="/storage",
     learning_rate="0.0005",
-    epochs="3",
+    epochs="100",
     batch_size="256",
     model_name="mnist",
-    acceptable_accuracy="0.50",
+    acceptable_accuracy="0.60",
 ):
     
-    storage_pvc = k8s.V1PersistentVolumeClaimVolumeSource(claim_name="storage")
-    storage_volume = k8s.V1Volume(name="storage", persistent_volume_claim=storage_pvc)
-    storage_volume_mount = k8s.V1VolumeMount(
-        mount_path="{{workflow.parameters.mount-path}}", name="storage")
-
     # 1. Make a sample of production data for retraining
     sample = dsl.ContainerOp(
         name="sample",
-        image="tidylobster/mnist-pipeline-sample:latest", # <-- Replace with correct docker image
+        image="hydrosphere/mnist-pipeline-sample:v1",  # <-- Replace with correct docker image
         file_outputs={"data_path": "/data_path.txt"},
         arguments=[
-            "--mount-path", mount_path, 
             "--hydrosphere-address", hydrosphere_address,
             "--model-name", model_name,
         ],
-    )     
-    sample.add_volume(storage_volume)
-    sample.add_volume_mount(storage_volume_mount)
-    
+    ).apply(use_aws_secret())
+
     # 2. Train and save a MNIST classifier using Tensorflow
     train = dsl.ContainerOp(
         name="train",
-        image="tidylobster/mnist-pipeline-train:latest",        # <-- Replace with correct docker image
+        image="hydrosphere/mnist-pipeline-train:v1",  # <-- Replace with correct docker image
         file_outputs={
             "accuracy": "/accuracy.txt",
             "model_path": "/model_path.txt",
         },
-        command=[
-            "python", "train-resnet.py",
+        arguments=[
             "--data-path", sample.outputs["data_path"], 
-            "--mount-path", mount_path,
             "--learning-rate", learning_rate,
             "--epochs", epochs,
-            "--batch-size", batch_size
+            "--batch-size", batch_size,
+            "--hydrosphere-address", hydrosphere_address
         ]
-    )
-    train.add_volume(storage_volume)
-    train.add_volume_mount(storage_volume_mount)
-    
+    ).apply(use_aws_secret())
     train.after(sample)
+    
     train.set_memory_request('1G')
     train.set_cpu_request('1')
-
+    
     # 3. Release trained model to the cluster
     release = dsl.ContainerOp(
         name="release",
-        image="tidylobster/mnist-pipeline-release:latest",         # <-- Replace with correct docker image
-        file_outputs={"model-version": "/model-version.txt"},
+        image="hydrosphere/mnist-pipeline-release:v1",  # <-- Replace with correct docker image
+        file_outputs={"model_version": "/model_version.txt"},
         arguments=[
             "--data-path", sample.outputs["data_path"],
-            "--mount-path", mount_path,
             "--model-name", model_name,
-            "--model-path", train.outputs["model_path"],
+            "--models-path", train.outputs["model_path"],
             "--accuracy", train.outputs["accuracy"],
             "--hydrosphere-address", hydrosphere_address,
             "--learning-rate", learning_rate,
             "--epochs", epochs,
             "--batch-size", batch_size,
         ]
-    )
-    release.add_volume(storage_volume) 
-    release.add_volume_mount(storage_volume_mount)
-    
+    ).apply(use_aws_secret())
     release.after(train)
 
-    # 4. Deploy to stage application
+    # 4. Deploy model to stage application
     deploy_to_stage = dsl.ContainerOp(
         name="deploy_to_stage",
-        image="tidylobster/mnist-pipeline-deploy-to-stage:latest",        # <-- Replace with correct docker image
-        file_outputs={"stage-app-name": "/stage-app-name.txt"},
+        image="hydrosphere/mnist-pipeline-deploy-to-stage:v1",  # <-- Replace with correct docker image
         arguments=[
-            "--model-version", release.outputs["model-version"],
+            "--model-version", release.outputs["model_version"],
             "--hydrosphere-address", hydrosphere_address,
             "--model-name", model_name,
         ],
-    )
+    ).apply(use_aws_secret())
     deploy_to_stage.after(release)
-    
-    # 5. Test the model 
+
+    # 5. Test the model via stage application
     test = dsl.ContainerOp(
         name="test",
-        image="tidylobster/mnist-pipeline-test:latest",               # <-- Replace with correct docker image
+        image="hydrosphere/mnist-pipeline-test:v1",  # <-- Replace with correct docker image
         arguments=[
-            "--stage-app-name", deploy_to_stage.outputs["stage-app-name"], 
             "--data-path", sample.outputs["data_path"],
-            "--mount-path", mount_path,
             "--hydrosphere-address", hydrosphere_address,
             "--acceptable-accuracy", acceptable_accuracy,
             "--model-name", model_name, 
         ],
-    )
-    test.add_volume(storage_volume) 
-    test.add_volume_mount(storage_volume_mount)
-    
+    ).apply(use_aws_secret())
     test.after(deploy_to_stage)
+
     test.set_retry(3)
 
-    # 6. Deploy to production application
+    # 6. Deploy model to production application
     deploy_to_prod = dsl.ContainerOp(
         name="deploy_to_prod",
-        image="tidylobster/mnist-pipeline-deploy-to-prod:latest",              # <-- Replace with correct docker image
+        image="hydrosphere/mnist-pipeline-deploy-to-prod:v1",  # <-- Replace with correct docker image
         arguments=[
-            "--model-version", release.outputs["model-version"],
+            "--model-version", release.outputs["model_version"],
             "--model-name", model_name,
             "--hydrosphere-address", hydrosphere_address
         ],
-    )
+    ).apply(use_aws_secret())
     deploy_to_prod.after(test)
     
 
@@ -128,21 +109,21 @@ if __name__ == "__main__":
     import kfp.compiler as compiler
     import subprocess, sys
 
-    # Parse namespace 
+    # Acquire parameters
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-f', '--file', help='New pipeline file', default="pipeline.tar.gz")
     parser.add_argument(
         '-n', '--namespace', help="Namespace, where kubeflow and serving are running", required=True)
     args = parser.parse_args()
-    arguments = args.__dict__
 
-    namespace, file = arguments["namespace"], arguments["file"]
-    compiler.Compiler().compile(pipeline_definition, file)
+    # Compile pipeline
+    compiler.Compiler().compile(pipeline_definition, args.file)
 
-    untar = f"tar -xvf {file}"
-    replace_minio = f"sed -i '' s/minio-service.kubeflow/minio-service.{namespace}/g pipeline.yaml"
-    replace_pipeline_runner = f"sed -i '' s/pipeline-runner/{namespace}-pipeline-runner/g pipeline.yaml"
+    # Replace hardcoded namespaces
+    untar = f"tar -xvf {args.file}"
+    replace_minio = f"sed -i '' s/minio-service.kubeflow/minio-service.{args.namespace}/g pipeline.yaml"
+    replace_pipeline_runner = f"sed -i '' s/pipeline-runner/{args.namespace}-pipeline-runner/g pipeline.yaml"
 
     process = subprocess.run(untar.split())
     process = subprocess.run(replace_minio.split())

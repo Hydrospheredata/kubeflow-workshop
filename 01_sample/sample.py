@@ -1,4 +1,4 @@
-import requests, psycopg2
+import requests, psycopg2, boto3 
 import pickle, os, random, urllib.parse
 import numpy as np
 import datetime, argparse
@@ -7,43 +7,41 @@ from hydro_serving_grpc.timemachine.reqstore_client import *
 
 
 def get_model_version_id(host_address, application_name):
-    addr = urllib.parse.urljoin(host_address, "api/v2/application/{}".format(application_name))
+    addr = urllib.parse.urljoin(host_address, f"api/v2/application/{application_name}")
     resp = requests.get(addr).json()
     assert resp.get("error") is None, resp.get("message")
     return resp["executionGraph"]["stages"][0]["modelVariants"][0]["modelVersion"]["id"]
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
+    parser.add_argument('--hydrosphere-address', required=True)
+    parser.add_argument('--model-name', required=True)
     parser.add_argument(
-        '--mount-path',
-        help='Path to PersistentVolumeClaim, deployed on the cluster',
-        required=True)
-    parser.add_argument(
-        '--hydrosphere-address', required=True)
-    parser.add_argument(
-        '--model-name', required=True)
+        '--dev', help='Flag for development purposes', action="store_true")
     
     args = parser.parse_args()
-    arguments = args.__dict__
+    s3 = boto3.resource('s3')
 
-    application_name = "{}-app".format(arguments["model_name"])
-    hydrosphere_address = arguments["hydrosphere_address"]
-    # namespace = urllib.parse.urlparse(host_address).netloc.split(".")[0]
-    reqstore_address = urllib.parse.urljoin(hydrosphere_address, "reqstore")
-
-    postgres_host = "postgres"
-    mount_path = arguments["mount_path"]
-    timestamp = round(datetime.datetime.now().timestamp())
-    data_path = os.path.join(mount_path, "data", "mnist", str(timestamp))
-    pipeline_dataset_path = "/data_path.txt" if mount_path != "./" else "./data_path.txt"
-
+    # Define required variables
+    application_name = f"{args.model_name}-app"
+    namespace = urllib.parse.urlparse(args.hydrosphere_address).netloc.split(".")[0]
+    data_path = os.path.join(namespace, "data", "mnist", str(round(datetime.datetime.now().timestamp())))
+    reqstore_address = urllib.parse.urljoin(args.hydrosphere_address, "reqstore")
+    
+    postgres_host = "postgres"  # Use Kubernetes service to find postgres deployment
+    postgres_pass = "hydro-serving"
+    postgres_user = "serving"
+    postgres_port = "5432"
+    postgres_db   = "postgres"
 
     client = ReqstoreHttpClient(reqstore_address)
-    # client = ReqstoreClient(reqstore_address, False)
-    model_version_id = str(get_model_version_id(hydrosphere_address, application_name))
+    model_version_id = str(get_model_version_id(args.hydrosphere_address, application_name))
 
-    conn = psycopg2.connect("postgresql://serving:hydro-serving@{}:5432/postgres".format(postgres_host))
+    conn = psycopg2.connect(
+        f"postgresql://{postgres_user}:{postgres_pass}@{postgres_host}:{postgres_port}/{postgres_db}"
+    )
     cur = conn.cursor()
 
     cur.execute('''
@@ -53,7 +51,7 @@ if __name__ == "__main__":
 
     print("Sample data from reqstore", flush=True)
     records = list(
-        client.getRange(0, 1854897851804888100, model_version_id, limit=10000, reverse=False))
+        client.getRange(0, 1854897851804888100, model_version_id, limit=10000, reverse="false"))
     random.shuffle(records)
 
     print("Prepare dataset", flush=True)
@@ -79,42 +77,44 @@ if __name__ == "__main__":
     assert len(train_imgs) > 0, "Not enough training data"
     assert len(test_imgs) > 0, "Not enough testing data"
 
-    os.makedirs(data_path, exist_ok=True)
+    # # For workshop purpose only we add additional data for model re-training
+    # with np.load("notmnist.npz") as data:
+    #     notmnist_imgs = data["imgs"]
+    #     notmnist_labels = data["labels"] + 10
+    
+    # with np.load("t10k.npz") as data:
+    #     mnist_imgs = data["imgs"]
+    #     mnist_labels = data["labels"]
 
-    # For workshop purpose only we add additional data for model re-training
-    with np.load("notmnist.npz") as data:
-        notmnist_imgs = data["imgs"]
-        notmnist_labels = data["labels"] + 10
+    # print(notmnist_imgs.shape, mnist_imgs.shape, train_imgs.shape, test_imgs.shape)
+    # print(notmnist_labels.shape, mnist_labels.shape, train_labels.shape, test_labels.shape)
+    # new_images = np.vstack([notmnist_imgs, mnist_imgs, train_imgs, test_imgs])
+    # new_labels = np.hstack([notmnist_labels, mnist_labels, train_labels, test_labels])
     
-    with np.load("t10k.npz") as data:
-        mnist_imgs = data["imgs"]
-        mnist_labels = data["labels"]
+    # # Shuffle training data
+    # permute = np.random.permutation(len(new_images))
+    # new_images = new_images[permute]
+    # new_labels = new_labels[permute]
+    
+    # # Make train/test split
+    
+    # train_imgs = new_images[:int(len(new_images) * 0.75)]
+    # train_labels = new_labels[:int(len(new_images) * 0.75)]
+    # test_imgs = new_images[int(len(new_images) * 0.75):]
+    # test_labels = new_labels[int(len(new_images) * 0.75):]
 
-    print(notmnist_imgs.shape, mnist_imgs.shape, train_imgs.shape, test_imgs.shape)
-    print(notmnist_labels.shape, mnist_labels.shape, train_labels.shape, test_labels.shape)
-    new_images = np.vstack([notmnist_imgs, mnist_imgs, train_imgs, test_imgs])
-    new_labels = np.hstack([notmnist_labels, mnist_labels, train_labels, test_labels])
+    print(f"Train subsample size: {len(train_imgs)}", flush=True)
+    print(f"Test subsample size: {len(test_imgs)}", flush=True)
     
-    # Shuffle training data
-    permute = np.random.permutation(len(new_images))
-    new_images = new_images[permute]
-    new_labels = new_labels[permute]
-    
-    # Make train/test split
-    
-    train_imgs = new_images[:int(len(new_images) * 0.75)]
-    train_labels = new_labels[:int(len(new_images) * 0.75)]
-    test_imgs = new_images[int(len(new_images) * 0.75):]
-    test_labels = new_labels[int(len(new_images) * 0.75):]
+    np.savez_compressed("train", imgs=train_imgs, labels=train_labels)
+    np.savez_compressed("test", imgs=test_imgs, labels=test_labels)
 
-    print("Train subsample size: {}".format(str(len(train_imgs))), flush=True)
-    print("Test subsample size: {}".format(str(len(test_imgs))), flush=True)
-    
-    np.savez_compressed(
-        os.path.join(data_path, "train"), imgs=train_imgs, labels=train_labels)
-    np.savez_compressed(
-        os.path.join(data_path, "test"), imgs=test_imgs, labels=test_labels)
+    # Upload files to S3 
+    for filename in ["train.npz", "test.npz"]:
+        print(f"Uploading {filename} to S3", flush=True)
+        s3.meta.client.upload_file(
+            filename, "odsc-workshop", os.path.join(data_path, filename))
 
     # Dump dataset location
-    with open(pipeline_dataset_path, "w+") as file:
+    with open("./data_path.txt" if args.dev else "/data_path.txt", "w+") as file:
         file.write(data_path)

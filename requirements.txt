@@ -1,8 +1,11 @@
-namesgenerator==0.3
-kfp==0.1.16
+tensorflow==1.13.1
 psycopg2-binary==2.7.5
 Pillow==5.2.0
 numpy==1.16.2
 requests==2.21.0
 tqdm==4.23.0
 hydrosdk==2.0.0rc8
+hydro-serving-grpc==2.0.3
+hs==2.0.6
+boto3==1.9.139
+namesgenerator==0.3
