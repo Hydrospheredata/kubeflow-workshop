@@ -32,6 +32,7 @@ def simulate_production_traffic(host=None, request_delay=0.5, request_amount=100
         CREATE TABLE IF NOT EXISTS 
             requests (timestamp bigint, uid integer, ground_truth integer);
     ''')
+    conn.commit()
 
     if not host:
         namespace = os.environ["NAMESPACE"]
