@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--hydrosphere-address', required=True)
-    parser.add_argument('--model-name', required=True)
+    parser.add_argument('--application-name', required=True)
     parser.add_argument(
         '--dev', help='Flag for development purposes', action="store_true")
     
@@ -25,7 +25,6 @@ if __name__ == "__main__":
     s3 = boto3.resource('s3')
 
     # Define required variables
-    application_name = f"{args.model_name}-app"
     namespace = urllib.parse.urlparse(args.hydrosphere_address).netloc.split(".")[0]
     data_path = os.path.join(namespace, "data", "mnist", str(round(datetime.datetime.now().timestamp())))
     reqstore_address = urllib.parse.urljoin(args.hydrosphere_address, "reqstore")
@@ -37,7 +36,7 @@ if __name__ == "__main__":
     postgres_db   = "postgres"
 
     client = ReqstoreHttpClient(reqstore_address)
-    model_version_id = str(get_model_version_id(args.hydrosphere_address, application_name))
+    model_version_id = str(get_model_version_id(args.hydrosphere_address, args.application_name))
 
     conn = psycopg2.connect(
         f"postgresql://{postgres_user}:{postgres_pass}@{postgres_host}:{postgres_port}/{postgres_db}"
@@ -76,32 +75,6 @@ if __name__ == "__main__":
 
     assert len(train_imgs) > 0, "Not enough training data"
     assert len(test_imgs) > 0, "Not enough testing data"
-
-    # # For workshop purpose only we add additional data for model re-training
-    # with np.load("notmnist.npz") as data:
-    #     notmnist_imgs = data["imgs"]
-    #     notmnist_labels = data["labels"] + 10
-    
-    # with np.load("t10k.npz") as data:
-    #     mnist_imgs = data["imgs"]
-    #     mnist_labels = data["labels"]
-
-    # print(notmnist_imgs.shape, mnist_imgs.shape, train_imgs.shape, test_imgs.shape)
-    # print(notmnist_labels.shape, mnist_labels.shape, train_labels.shape, test_labels.shape)
-    # new_images = np.vstack([notmnist_imgs, mnist_imgs, train_imgs, test_imgs])
-    # new_labels = np.hstack([notmnist_labels, mnist_labels, train_labels, test_labels])
-    
-    # # Shuffle training data
-    # permute = np.random.permutation(len(new_images))
-    # new_images = new_images[permute]
-    # new_labels = new_labels[permute]
-    
-    # # Make train/test split
-    
-    # train_imgs = new_images[:int(len(new_images) * 0.75)]
-    # train_labels = new_labels[:int(len(new_images) * 0.75)]
-    # test_imgs = new_images[int(len(new_images) * 0.75):]
-    # test_labels = new_labels[int(len(new_images) * 0.75):]
 
     print(f"Train subsample size: {len(train_imgs)}", flush=True)
     print(f"Test subsample size: {len(test_imgs)}", flush=True)

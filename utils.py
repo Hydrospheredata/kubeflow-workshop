@@ -24,7 +24,7 @@ def generate_data(base_path, test_file, shuffle=False):
     return imgs, labels
 
 
-def simulate_production_traffic(host=None, request_delay=1, request_amount=10000, file="combined.npz", shuffle=False):
+def simulate_production_traffic(application_name="mnist_app", host=None, request_delay=1, request_amount=10000, file="combined.npz", shuffle=False):
     conn = psycopg2.connect(f"postgresql://{USER}:{PASS}@{ADDRESS}:{PORT}/{DATABASE}")
     cur = conn.cursor()
 
@@ -41,7 +41,7 @@ def simulate_production_traffic(host=None, request_delay=1, request_amount=10000
     stub = hs.PredictionServiceStub(channel)
 
     # an application, that will be invoked
-    model_spec = hs.ModelSpec(name="mnist-app")
+    model_spec = hs.ModelSpec(name=application_name)
 
     # basic shape for images
     tensor_shape = hs.TensorShapeProto(dim=[

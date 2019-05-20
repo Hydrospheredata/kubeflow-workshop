@@ -1,4 +1,4 @@
-FROM hydrosphere/odsc-workshop-base:v1
+FROM hydrosphere/odsc-workshop-base:$TAG
 
 ADD ./release.py /src/
 

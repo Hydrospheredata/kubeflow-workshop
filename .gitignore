@@ -10,5 +10,4 @@ __pycache__/
 *.tar.gz
 *.db
 *.yaml*
-shell.sh
 .venv

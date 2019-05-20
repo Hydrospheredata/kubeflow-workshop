@@ -55,9 +55,11 @@ if __name__ == "__main__":
         batch_size=args.batch_size, 
         epochs=args.epochs)
     
+    num_classes = len(np.unique(np.hstack([train_labels, test_labels])))
+
     # Create the model
     estimator = tf.estimator.DNNClassifier(
-        n_classes=len(np.unique(np.hstack([train_labels, test_labels]))),
+        n_classes=num_classes,
         hidden_units=[256, 64],
         feature_columns=[img_feature_column],
         optimizer=tf.train.AdamOptimizer(learning_rate=args.learning_rate))
@@ -87,10 +89,12 @@ if __name__ == "__main__":
         accuracy_file = "./accuracy.txt"
         metrics_file = "./mlpipeline-metrics.json"
         model_path = "./model_path.txt"
+        classes_path = "./classes.txt"
     else: 
         accuracy_file = "/accuracy.txt"
         metrics_file = "/mlpipeline-metrics.json"
         model_path = "/model_path.txt"
+        classes_path = "/classes.txt"
 
     metrics = {
         'metrics': [
@@ -114,4 +118,7 @@ if __name__ == "__main__":
 
     with open(model_path, "w+") as file:
         file.write(model_save_path)
+    
+    with open(classes_path, "w+") as file:
+        file.write(str(num_classes))
     

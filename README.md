@@ -16,18 +16,17 @@ _Note: All components of Kubeflow by default will be installed into `kubeflow` n
 1. Adjust `pipeline.py` to point to your published images
 1. Compile the pipeline
     ```sh 
-    $ python pipeline.py pipeline.tar.gz && tar -xvf pipeline.tar.gz
+    $ python workflows/origin.py
     ```
 
-This will create two files for you: `pipeline.yaml` and `pipeline.tar.gz`. You can use both of these files to start a pipeline execution. 
+This will create two files for you: `pipeline.yaml`. You can use this file to start a pipeline execution. 
 
 - (Recommended) Kubeflow Pipelines
     - UI
         1. Open Kubeflow UI and upload `pipeline.yaml` with `Upload Workflow` button
         1. Create an experiment and make a run using this pipeline
     - Shell
-        1. Adjust `client.py` as needed: 1) specify compiled pipeline definition; 2) specify ml-pipeline endpoint; 3) specify experiment name.
-        1. Execute `python client.py`
+        1. Execute `python kubeflow_client.py`
 
 - Argo Workflows
     1. Install [argo](https://github.com/argoproj/argo/blob/master/demo.md#1-download-argo)

@@ -8,7 +8,7 @@ if __name__ == "__main__":
     parser.add_argument('--data-path', required=True)
     parser.add_argument('--hydrosphere-address', required=True)
     parser.add_argument('--acceptable-accuracy', type=float, required=True)
-    parser.add_argument('--model-name', required=True)
+    parser.add_argument('--application-name', required=True)
     
     args = parser.parse_args()
     s3 = boto3.resource('s3')
@@ -22,8 +22,7 @@ if __name__ == "__main__":
         labels = data["labels"].astype(int)[:100]
     
     requests_delay = 0.2
-    application_name = f"{args.model_name}-stage-app"
-    service_link = f"{args.hydrosphere_address}/gateway/application/{application_name}"
+    service_link = f"{args.hydrosphere_address}/gateway/application/{args.application_name}"
 
     print(f"Using URL :: {service_link}", flush=True)
 
