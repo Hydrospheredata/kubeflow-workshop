@@ -1,5 +1,5 @@
 import argparse
-import os
+import os, urllib.parse
 from hydrosdk import sdk
 
 
@@ -21,3 +21,6 @@ if __name__ == '__main__':
 
     with open("./application_name.txt" if args.dev else "/application_name.txt", "w+") as file:
         file.write(application_name)
+
+    with open("./application_link.txt" if args.dev else "/application_link.txt", "w+") as file:
+        file.write(urllib.parse.urljoin(args.hydrosphere_address, f"applications/{application_name}"))

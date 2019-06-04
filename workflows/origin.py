@@ -9,10 +9,12 @@ tag = os.environ.get("TAG", "latest")
 @dsl.pipeline(name="mnist", description="MNIST classifier")
 def pipeline_definition(
     hydrosphere_address,
-    learning_rate="0.01",
-    epochs="10",
-    autoencoder_steps="1000",
-    batch_size="256",
+    model_learning_rate="0.01",
+    model_epochs="10",
+    model_batch_size="256",
+    autoencoder_learning_rate="0.01",
+    autoencoder_steps="3500",
+    autoencoder_batch_size="256",
     model_name="mnist",
     model_autoencoder_name="mnist_autoencoder",
     acceptable_accuracy="0.90",
@@ -37,9 +39,9 @@ def pipeline_definition(
         },
         arguments=[
             "--data-path", download.outputs["data_path"], 
-            "--learning-rate", learning_rate,
-            "--epochs", epochs,
-            "--batch-size", batch_size,
+            "--learning-rate", model_learning_rate,
+            "--epochs", model_epochs,
+            "--batch-size", model_batch_size,
             "--hydrosphere-address", hydrosphere_address
         ]
     ).apply(use_aws_secret())
@@ -58,8 +60,8 @@ def pipeline_definition(
         arguments=[
             "--data-path", download.outputs["data_path"], 
             "--steps", autoencoder_steps, 
-            "--learning-rate", learning_rate,
-            "--batch-size", batch_size,
+            "--learning-rate", autoencoder_learning_rate,
+            "--batch-size", autoencoder_batch_size,
             "--hydrosphere-address", hydrosphere_address
         ]
     ).apply(use_aws_secret())
@@ -70,7 +72,10 @@ def pipeline_definition(
     release_autoencoder = dsl.ContainerOp(
         name="release_autoencoder",
         image=f"hydrosphere/mnist-pipeline-release-autoencoder:{tag}",  # <-- Replace with correct docker image
-        file_outputs={"model_version": "/model_version.txt"},
+        file_outputs={
+            "model_version": "/model_version.txt",
+            "model_link": "/model_link.txt"
+        },
         arguments=[
             "--data-path", download.outputs["data_path"],
             "--model-name", model_autoencoder_name,
@@ -78,8 +83,8 @@ def pipeline_definition(
             "--classes", train_autoencoder.outputs["classes"],
             "--loss", train_autoencoder.outputs["loss"],
             "--hydrosphere-address", hydrosphere_address,
-            "--learning-rate", learning_rate,
-            "--batch-size", batch_size,
+            "--learning-rate", autoencoder_learning_rate,
+            "--batch-size", autoencoder_batch_size,
             "--steps", autoencoder_steps, 
         ]
     ).apply(use_aws_secret())
@@ -88,7 +93,10 @@ def pipeline_definition(
     deploy_autoencoder_to_prod = dsl.ContainerOp(
         name="deploy_autoencoder_to_prod",
         image=f"hydrosphere/mnist-pipeline-deploy:{tag}",  # <-- Replace with correct docker image
-        file_outputs={"application_name": "/application_name.txt"},
+        file_outputs={
+            "application_name": "/application_name.txt",
+            "application_link": "/application_link.txt"
+        },
         arguments=[
             "--model-version", release_autoencoder.outputs["model_version"],
             "--application-name-postfix", "_app", 
@@ -101,7 +109,10 @@ def pipeline_definition(
     release_model = dsl.ContainerOp(
         name="release_model",
         image=f"hydrosphere/mnist-pipeline-release-model:{tag}",  # <-- Replace with correct docker image
-        file_outputs={"model_version": "/model_version.txt"},
+        file_outputs={
+            "model_version": "/model_version.txt",
+            "model_link": "/model_link.txt"
+        },
         arguments=[
             "--data-path", download.outputs["data_path"],
             "--model-name", model_name,
@@ -110,9 +121,9 @@ def pipeline_definition(
             "--classes", train_model.outputs["classes"],
             "--accuracy", train_model.outputs["accuracy"],
             "--hydrosphere-address", hydrosphere_address,
-            "--learning-rate", learning_rate,
-            "--epochs", epochs,
-            "--batch-size", batch_size,
+            "--learning-rate", model_learning_rate,
+            "--epochs", model_epochs,
+            "--batch-size", model_batch_size,
         ]
     ).apply(use_aws_secret())
 
@@ -120,7 +131,10 @@ def pipeline_definition(
     deploy_model_to_stage = dsl.ContainerOp(
         name="deploy_model_to_stage",
         image=f"hydrosphere/mnist-pipeline-deploy:{tag}",  # <-- Replace with correct docker image
-        file_outputs={"application_name": "/application_name.txt"},
+        file_outputs={
+            "application_name": "/application_name.txt",
+            "application_link": "/application_link.txt"
+        },
         arguments=[
             "--model-version", release_model.outputs["model_version"],
             "--application-name-postfix", "_stage", 
@@ -146,7 +160,10 @@ def pipeline_definition(
     deploy_model_to_prod = dsl.ContainerOp(
         name="deploy_to_prod",
         image=f"hydrosphere/mnist-pipeline-deploy:{tag}",  # <-- Replace with correct docker image
-        file_outputs={"application_name": "/application_name.txt"},
+        file_outputs={
+            "application_name": "/application_name.txt",
+            "application_link": "/application_link.txt"
+        },
         arguments=[
             "--model-version", release_model.outputs["model_version"],
             "--model-name", model_name,

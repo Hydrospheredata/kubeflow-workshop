@@ -1,5 +1,5 @@
 import argparse
-import os, boto3
+import os, boto3, urllib.parse
 from hydrosdk import sdk
 
 if __name__ == "__main__": 
@@ -89,3 +89,10 @@ if __name__ == "__main__":
     # Dump built model version 
     with open("./model_version.txt" if args.dev else "/model_version.txt", 'w+') as file:
         file.write(str(result['modelVersion']))
+    
+    with open("./model_link.txt" if args.dev else "/model_link.txt", "w+") as file:
+        model_id = str(result["model"]["id"])
+        version_id = str(result["id"])
+        link = urllib.parse.urljoin(args.hydrosphere_address, 
+            f"models/{model_id}/{version_id}/details")
+        file.write(link)

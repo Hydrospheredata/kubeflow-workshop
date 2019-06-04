@@ -9,4 +9,3 @@ hydro-serving-grpc==2.0.3
 hs==2.0.6
 boto3==1.9.139
 namesgenerator==0.3
-kfp==0.1.19
