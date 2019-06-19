@@ -178,20 +178,5 @@ if __name__ == "__main__":
     import kfp.compiler as compiler
     import subprocess, sys
 
-    # Acquire parameters
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-n', '--namespace', help="Namespace, where kubeflow and serving are running", required=True)
-    args = parser.parse_args()
-
     # Compile pipeline
     compiler.Compiler().compile(pipeline_definition, "pipeline.tar.gz")
-
-    # Replace hardcoded namespaces
-    untar = f"tar -xvf pipeline.tar.gz"
-    replace_minio = f"sed -i '' s/minio-service.kubeflow/minio-service.{args.namespace}/g pipeline.yaml"
-    replace_pipeline_runner = f"sed -i '' s/pipeline-runner/{args.namespace}-pipeline-runner/g pipeline.yaml"
-
-    process = subprocess.run(untar.split())
-    process = subprocess.run(replace_minio.split())
-    process = subprocess.run(replace_pipeline_runner.split())
