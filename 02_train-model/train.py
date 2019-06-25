@@ -3,12 +3,13 @@ import tensorflow as tf
 import numpy as np
 import argparse, boto3
 import urllib.parse
+from sklearn.metrics import confusion_matrix
 
 
-def input_fn(imgs, labels, batch_size=256, epochs=10):
+def input_fn(imgs, labels, batch_size=256, epochs=10, shuffle=True):
     return tf.estimator.inputs.numpy_input_fn(
         x={"imgs": imgs.reshape((len(imgs), 28, 28, 1))}, 
-        y=labels, shuffle=True, batch_size=batch_size, num_epochs=epochs)
+        y=labels, shuffle=shuffle, batch_size=batch_size, num_epochs=epochs)
 
 
 if __name__ == "__main__":
@@ -59,6 +60,7 @@ if __name__ == "__main__":
 
     # Create the model
     estimator = tf.estimator.DNNClassifier(
+        model_dir=models_path,
         n_classes=num_classes,
         hidden_units=[256, 64],
         feature_columns=[img_feature_column],
@@ -68,6 +70,10 @@ if __name__ == "__main__":
     estimator.train(train_fn)
     evaluation = estimator.evaluate(test_fn)
     accuracy = float(evaluation["accuracy"])
+
+    cm_fn = input_fn(imgs=test_imgs, labels=test_labels, epochs=1, shuffle=False)
+    result = list(map(lambda x: x["class_ids"][0], estimator.predict(cm_fn)))
+    cm = confusion_matrix(test_labels, result)
 
     # Export the model 
     serving_input_receiver_fn = tf.estimator \
@@ -86,16 +92,21 @@ if __name__ == "__main__":
 
     # Perform metrics calculations
     if args.dev: 
+        confusion_matrix_file = './confusion_matrix.csv'
         accuracy_file = "./accuracy.txt"
         metrics_file = "./mlpipeline-metrics.json"
+        metadata_file = "./mlpipeline-ui-metadata.json"
         model_path = "./model_path.txt"
         classes_path = "./classes.txt"
     else: 
+        confusion_matrix_file = "/confusion_matrix.csv"
         accuracy_file = "/accuracy.txt"
         metrics_file = "/mlpipeline-metrics.json"
+        metadata_file = "/mlpipeline-ui-metadata.json"
         model_path = "/model_path.txt"
         classes_path = "/classes.txt"
 
+    
     metrics = {
         'metrics': [
             {
@@ -109,16 +120,50 @@ if __name__ == "__main__":
         ],
     }
 
+    metadata = {
+        'outputs': [
+            {
+                'type': 'tensorboard',
+                'source': os.path.join(os.getcwd(), models_path),
+            },
+            {
+                'type': 'confusion_matrix',
+                'format': 'csv',
+                'schema': [
+                    {'name': 'one', 'type': 'CATEGORY'},
+                    {'name': 'two', 'type': 'CATEGORY'},
+                    {'name': 'three', 'type': 'CATEGORY'},
+                    {'name': 'four', 'type': 'CATEGORY'},
+                    {'name': 'five', 'type': 'CATEGORY'},
+                    {'name': 'six', 'type': 'CATEGORY'},
+                    {'name': 'seven', 'type': 'CATEGORY'},
+                    {'name': 'eight', 'type': 'CATEGORY'},
+                    {'name': 'nine', 'type': 'CATEGORY'},
+                    {'name': 'ten', 'type': 'CATEGORY'},
+                ],
+                'source': confusion_matrix_file,
+                'labels': [
+                    'one', 'two', 'three', 'four', 'five', 
+                    'six', 'seven', 'eight', 'nine', 'ten'
+                ],
+            }
+        ]
+    }
+
     # Dump metrics
+    np.savetxt(confusion_matrix_file, cm, fmt='%d', delimiter=',')    
+
     with open(accuracy_file, "w+") as file:
         file.write(str(accuracy))
     
     with open(metrics_file, "w+") as file:
         json.dump(metrics, file)
 
+    with open(metadata_file, "w+") as file:
+        json.dump(metadata, file)
+
     with open(model_path, "w+") as file:
         file.write(model_save_path)
     
     with open(classes_path, "w+") as file:
         file.write(str(num_classes))
-    

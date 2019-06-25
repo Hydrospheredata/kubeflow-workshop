@@ -10,3 +10,4 @@ hs==2.0.6
 boto3==1.9.139
 namesgenerator==0.3
 kfp==0.1.19
+scikit-learn==0.20.2
