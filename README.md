@@ -10,27 +10,34 @@ This repository shows how to orchestrate a machine learning workflow with [Kubef
 
 _Note: All components of Kubeflow by default will be installed into `kubeflow` namespace._
 
-## Run a Workflow
 
-1. Build and publish all stages of the workflow 01-07
-1. Adjust `pipeline.py` to point to your published images
-1. Compile the pipeline
-    ```sh 
-    $ python workflows/origin.py
+## Repository Structure
+
+```
+├── Dockerfile         - base image, used for building working steps 
+├── README.md          - this document
+├── bash.sh            - helper script for working with workshop
+├── notebooks          - notebooks for running workshop
+├── requirements.txt   - requiremets for building steps
+├── serverless         - definitions of Lambda functions and Cloud Formation templates for AWS cloud
+├── steps              — actual running steps, that will be executed in the pipeline
+├── utilities          - utility script to work with the cloud, orhcestrator, etc.
+└── workflows          - definitions of the pipelines
+```
+
+## Run Workflow
+1. Build and publish all steps of the workflow
     ```
+    $ ./bash.sh --build-base --build-workers --docker
+    ```
+1. Compile origin/subsample pipeline
+    ```
+    $ ./bash.sh --compile-origin
+    $ ./bash.sh --compile-subsample
+    ```
+1. Upload compiled pipeline `pipeline.tar.gz` to Kubeflow using UI.
+1. Create an experiment on Kubeflow and start a run. 
 
-This will create two files for you: `pipeline.yaml`. You can use this file to start a pipeline execution. 
-
-- (Recommended) Kubeflow Pipelines
-    - UI
-        1. Open Kubeflow UI and upload `pipeline.yaml` with `Upload Workflow` button
-        1. Create an experiment and make a run using this pipeline
-    - Shell
-        1. Execute `python kubeflow_client.py`
-
-- Argo Workflows
-    1. Install [argo](https://github.com/argoproj/argo/blob/master/demo.md#1-download-argo)
-    1. Submit a workflow
-        ```sh
-        $ argo submit pipeline.yaml --watch
-        ```
+## Help and Support
+[![Join the chat at https://gitter.im/Hydrospheredata/hydro-serving](https://badges.gitter.im/Hydrospheredata/hydro-serving.svg)](https://gitter.im/Hydrospheredata/hydro-serving?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![](https://img.shields.io/badge/documentation-latest-af1a97.svg)](https://hydrosphere.io/serving-docs/) 
