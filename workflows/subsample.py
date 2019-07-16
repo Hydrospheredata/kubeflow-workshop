@@ -7,7 +7,7 @@ import argparse, os
 
 @dsl.pipeline(name="MNIST", description="MNIST Workflow Example")
 def pipeline_definition(
-    application_name,
+    application_name="mnist_app",
     bucket_name="gs://workshop-hydrosphere",
     model_learning_rate="0.01",
     model_epochs="10",

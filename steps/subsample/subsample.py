@@ -5,7 +5,7 @@ import datetime, argparse, hashlib
 from hydro_serving_grpc.timemachine.reqstore_client import *
 from decouple import Config, RepositoryEnv
 
-# from storage import *
+from storage import *
 from orchestrator import *
 
 
