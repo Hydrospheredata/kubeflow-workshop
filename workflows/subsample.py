@@ -7,6 +7,7 @@ import argparse, os
 
 @dsl.pipeline(name="MNIST", description="MNIST Workflow Example")
 def pipeline_definition(
+    application_name,
     bucket_name="gs://workshop-hydrosphere",
     model_learning_rate="0.01",
     model_epochs="10",
@@ -14,18 +15,19 @@ def pipeline_definition(
     drift_detector_learning_rate="0.01",
     drift_detector_steps="3500",
     drift_detector_batch_size="256",
-    model_drift_detector_name="mnist_drift_detector",
     model_name="mnist",
-    acceptable_accuracy="0.90",
+    model_drift_detector_name="mnist_drift_detector",
+    acceptable_accuracy="0.80",
 ):
     """ Pipeline describes structure in which steps should be executed. """
 
-    # 1. Download MNIST dataset
-    download = dsl.ContainerOp(
-        name="download",
-        image=f"hydrosphere/mnist-pipeline-download:{tag}",
+    # 1. Sample production traffic and prepare training data
+    sample = dsl.ContainerOp(
+        name="sample",
+        image=f"hydrosphere/mnist-pipeline-subsample:{tag}",
         file_outputs={"data_path": "/data_path.txt"},
         arguments=[
+            "--application-name", application_name,
             "--bucket-name", bucket_name,
         ]
     ).apply(use_gcp_secret())
@@ -44,7 +46,7 @@ def pipeline_definition(
             "mlflow_link": "/mlflow_link.txt",
         },
         arguments=[
-            "--data-path", download.outputs["data_path"],
+            "--data-path", sample.outputs["data_path"],
             "--learning-rate", model_learning_rate,
             "--batch-size", model_batch_size,
             "--epochs", model_epochs,
@@ -66,12 +68,12 @@ def pipeline_definition(
             "mlflow_link": "/mlflow_link.txt",
         },
         arguments=[
-            "--data-path", download.outputs["data_path"],
+            "--data-path", sample.outputs["data_path"],
             "--learning-rate", drift_detector_learning_rate,
             "--batch-size", drift_detector_batch_size,
             "--steps", drift_detector_steps,
             "--model-name", model_drift_detector_name,
-            "--bucket-name", bucket_name,
+            "--bucket-name", bucket_name
         ]
     ).apply(use_gcp_secret())
     train_drift_detector.set_memory_request('2G')
@@ -86,7 +88,7 @@ def pipeline_definition(
             "model_link": "/model_link.txt"
         },
         arguments=[
-            "--data-path", download.outputs["data_path"],
+            "--data-path", sample.outputs["data_path"],
             "--model-path", train_drift_detector.outputs["model_path"],
             "--model-name", model_drift_detector_name,
             "--learning-rate", drift_detector_learning_rate,
@@ -127,7 +129,7 @@ def pipeline_definition(
             "--model-name", model_name,
             "--classes", train_model.outputs["classes"],
             "--bucket-name", bucket_name, 
-            "--data-path", download.outputs["data_path"],
+            "--data-path", sample.outputs["data_path"],
             "--model-path", train_model.outputs["model_path"],
             "--accuracy", train_model.outputs["accuracy"],
             "--average-loss", train_model.outputs["average_loss"],
@@ -151,8 +153,8 @@ def pipeline_definition(
         arguments=[
             "--model-version", release_model.outputs["model_version"],
             "--application-name-postfix", "_stage_app", 
-            "--bucket-name", bucket_name,
             "--model-name", model_name,
+            "--bucket-name", bucket_name,
         ],
     ).apply(use_gcp_secret())
 
@@ -161,7 +163,7 @@ def pipeline_definition(
         name="test_model",
         image=f"hydrosphere/mnist-pipeline-test:{tag}", 
         arguments=[
-            "--data-path", download.outputs["data_path"],
+            "--data-path", sample.outputs["data_path"],
             "--application-name", deploy_model_to_stage.outputs["application_name"], 
             "--acceptable-accuracy", acceptable_accuracy,
             "--bucket-name", bucket_name,
@@ -169,7 +171,7 @@ def pipeline_definition(
     ).apply(use_gcp_secret())
     test_model.set_retry(3)
 
-    # # 9. Deploy MNIST classifier model as endpoint application to production
+    # 9. Deploy MNIST classifier model as endpoint application to production
     deploy_model_to_prod = dsl.ContainerOp(
         name="deploy_model_to_prod",
         image=f"hydrosphere/mnist-pipeline-deploy:{tag}",  
@@ -180,11 +182,11 @@ def pipeline_definition(
         arguments=[
             "--model-version", release_model.outputs["model_version"],
             "--application-name-postfix", "_app", 
-            "--bucket-name", bucket_name,
             "--model-name", model_name,
+            "--bucket-name", bucket_name,
             "--mlflow-model-link", train_model.outputs["mlflow_link"],
             "--mlflow-drift-detector-link", train_drift_detector.outputs["mlflow_link"],
-            "--data-path", download.outputs["data_path"],
+            "--data-path", sample.outputs["data_path"],
             "--model-path", train_model.outputs["model_path"],
             "--model-drift-detector-path", train_drift_detector.outputs["model_path"],
         ],
@@ -201,7 +203,7 @@ if __name__ == "__main__":
     parser.add_argument('--tag', 
         help="Which tag of image to use, when compiling pipeline", default="latest")
     args = parser.parse_args()
-    
-    tag = args.tag
+
     # Compile pipeline
+    tag = args.tag
     compiler.Compiler().compile(pipeline_definition, "pipeline.tar.gz")

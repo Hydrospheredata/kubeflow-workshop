@@ -2,6 +2,7 @@ __pycache__/
 .DS_Store
 .vscode
 /**/.ipynb_checkpoints
+/**/node_modules
 /**/data
 /**/models
 /**/other
@@ -10,4 +11,7 @@ __pycache__/
 *.tar.gz
 *.db
 *.yaml*
+compiled.zip
+package-lock.json
 .venv
+*.env
