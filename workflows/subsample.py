@@ -1,135 +1,212 @@
 import kfp.dsl as dsl 
 from kfp.aws import use_aws_secret
-from kfp.gcp import use_gcp_secret
-import kubernetes.client.models as k8s
+from kubernetes import client as k8s
 import argparse, os
+
+
+def use_config_map(name, mount_path="/etc/config"):
+    """ 
+    Mounts ConfigMap defined on the cluster to the running step under specified 
+    path as a file with corresponding value. 
+    
+    Parameters
+    ----------
+    name: str
+        Name of the ConfigMap, defined in current namespace.
+    mount_path: str
+        Path, where to mount ConfigMap to. 
+
+    Returns
+    -------
+    func
+        A function, which have to be applied to the ContainerOp. 
+    """
+    
+    key_path_mapper = [
+        "postgres.host",
+        "postgres.port",
+        "postgres.user",
+        "postgres.pass",
+        "postgres.dbname",
+        "uri.mnist",
+        "uri.mlflow",
+        "uri.hydrosphere",
+        "uri.reqstore",
+        "default.tensorflow_runtime",
+    ]
+
+    def _use_config_map(task):
+        config_map = k8s.V1ConfigMapVolumeSource(
+            name=name,
+            items=[k8s.V1KeyToPath(key=key, path=key) \
+                for key in key_path_mapper]
+        ) 
+        return task \
+            .add_volume(k8s.V1Volume(config_map=config_map, name=name)) \
+            .add_volume_mount(k8s.V1VolumeMount(mount_path=mount_path, name=name))
+
+    return _use_config_map
+
+
+def apply_config_map_and_aws_secret(op):
+    return op.apply(use_config_map("mnist-workflow")).apply(use_aws_secret())
 
 
 @dsl.pipeline(name="MNIST", description="MNIST Workflow Example")
 def pipeline_definition(
-    application_name="mnist_app",
-    bucket_name="gs://workshop-hydrosphere",
-    model_learning_rate="0.01",
-    model_epochs="10",
-    model_batch_size="256",
-    drift_detector_learning_rate="0.01",
-    drift_detector_steps="3500",
-    drift_detector_batch_size="256",
-    model_name="mnist",
-    model_drift_detector_name="mnist_drift_detector",
+    target_application_name="kubeflow-mnist-app",
+    sample_limit="10000",
+    train_part="0.7",
+    validation_part="0.1",
+    model_learning_rate="0.005",
+    model_epochs="50",
+    model_batch_size="128",
+    drift_detector_learning_rate="0.005",
+    drift_detector_steps="5400",
+    drift_detector_batch_size="128",
+    model_drift_detector_name="kubeflow-mnist-drift-detector",
+    model_name="kubeflow-mnist",
     acceptable_accuracy="0.80",
+    test_sample_size="200",
 ):
-    """ Pipeline describes structure in which steps should be executed. """
+    """ 
+    Pipeline describes structure in which steps should be executed. 
+    
+    Parameters
+    ----------
+    target_application_name: str
 
-    # 1. Sample production traffic and prepare training data
-    sample = dsl.ContainerOp(
-        name="sample",
-        image=f"hydrosphere/mnist-pipeline-subsample:{tag}",
-        file_outputs={"data_path": "/data_path.txt"},
-        arguments=[
-            "--application-name", application_name,
-            "--bucket-name", bucket_name,
-        ]
-    ).apply(use_gcp_secret())
+    sample_limit: str
 
-    # 2. Train MNIST classifier
-    train_model = dsl.ContainerOp(
-        name="train_model",
-        image=f"hydrosphere/mnist-pipeline-train-model:{tag}",
+    train_part: str
+
+    validation_part: str
+
+    model_learning_rate: str
+        Learning rate, used for training a classifier.
+    model_epochs: str
+        Amount of epochs, during which a classifier will be trained.
+    model_batch_size: str
+        Batch size, used for training a classifier.
+    drift_detector_learning_rate: str
+        Learning rate, used for training an autoencoder.
+    drift_detector_steps: str
+        Amount of steps, during which an autoencoder will be trained.
+    drift_detector_batch_size: str
+        Batch size, used for training an autoencoder.
+    model_name: str
+        Name of the classifier, which will be used for deployment.
+    model_drift_detector_name: str
+        Name of the autoencoder, which will be used for deployment.
+    acceptable_accuracy: str
+        Accuracy level indicating the final acceptable performance of the model 
+        in the evaluation step, which will let let model to be either deployed 
+        to production or cause workflow execution to fail. 
+    """
+
+    # Configure all steps to have ConfigMap and use aws secret
+    dsl.get_pipeline_conf().add_op_transformer(apply_config_map_and_aws_secret)
+
+    subsample = dsl.ContainerOp(
+        name="subsample",
+        image=f"{registry}/mnist-pipeline-subsample:{tag}",
         file_outputs={
-            "model_path": "/model_path.txt",
-            "classes": "/classes.txt",
-            "accuracy": "/accuracy.txt",
-            "average_loss": "/average_loss.txt",
-            "global_step": "/global_step.txt",
-            "loss": "/loss.txt",
-            "mlflow_link": "/mlflow_link.txt",
+            "output_data_path": "/output_data_path",
+            "logs_path": "/logs_path",
         },
         arguments=[
-            "--data-path", sample.outputs["data_path"],
-            "--learning-rate", model_learning_rate,
-            "--batch-size", model_batch_size,
-            "--epochs", model_epochs,
-            "--model-name", model_name, 
-            "--bucket-name", bucket_name,
-        ]
-    ).apply(use_gcp_secret())
-    train_model.set_memory_request('1G')
-    train_model.set_cpu_request('1')
+            "--output-data-path", "s3://workshop-hydrosphere/mnist/data",
+            "--application-name", target_application_name,
+            "--limit", sample_limit,
+            "--train-part", train_part, 
+            "--validation-part", validation_part
+        ],
+    )
 
-    # 3. Train Drift Detector on MNIST dataset
     train_drift_detector = dsl.ContainerOp(
         name="train_drift_detector",
-        image=f"hydrosphere/mnist-pipeline-train-drift-detector:{tag}",
+        image=f"{registry}/mnist-pipeline-train-drift-detector:{tag}",
         file_outputs={
-            "model_path": "/model_path.txt",
-            "classes": "/classes.txt",
-            "loss": "/loss.txt",
-            "mlflow_link": "/mlflow_link.txt",
+            "logs_path": "/logs_path",
+            "model_path": "/model_path",
+            "loss": "/loss",
         },
         arguments=[
-            "--data-path", sample.outputs["data_path"],
+            "--data-path", subsample.outputs["output_data_path"],
+            "--model-path", "s3://workshop-hydrosphere/mnist/model",
+            "--model-name", model_drift_detector_name,
             "--learning-rate", drift_detector_learning_rate,
             "--batch-size", drift_detector_batch_size,
             "--steps", drift_detector_steps,
-            "--model-name", model_drift_detector_name,
-            "--bucket-name", bucket_name
-        ]
-    ).apply(use_gcp_secret())
-    train_drift_detector.set_memory_request('2G')
-    train_drift_detector.set_cpu_request('1')
+        ],
+    ).set_memory_request('2G').set_cpu_request('1')
 
-    # 4. Release Drift Detector to Hydrosphere.io platform 
-    release_drift_detector = dsl.ContainerOp(
-        name="release_drift_detector",
-        image=f"hydrosphere/mnist-pipeline-release-drift-detector:{tag}", 
+    train_model = dsl.ContainerOp(
+        name="train_model",
+        image=f"{registry}/mnist-pipeline-train-model:{tag}",
         file_outputs={
-            "model_version": "/model_version.txt",
-            "model_link": "/model_link.txt"
+            "logs_path": "/logs_path",
+            "model_path": "/model_path",
+            "accuracy": "/accuracy",
+            "num_classes": "/num_classes",
+            "average_loss": "/average_loss",
+            "global_step": "/global_step",
+            "loss": "/loss",
         },
         arguments=[
-            "--data-path", sample.outputs["data_path"],
+            "--data-path", subsample.outputs["output_data_path"],
+            "--model-path", "s3://workshop-hydrosphere/mnist/model",
+            "--model-name", model_name,
+            "--learning-rate", model_learning_rate,
+            "--batch-size", model_batch_size,
+            "--epochs", model_epochs,
+        ],
+    ).set_memory_request('1G').set_cpu_request('1')
+
+    release_drift_detector = dsl.ContainerOp(
+        name="release_drift_detector",
+        image=f"{registry}/mnist-pipeline-release-drift-detector:{tag}", 
+        file_outputs={
+            "model_version": "/model_version",
+            "model_uri": "/model_uri"
+        },
+        arguments=[
+            "--data-path", subsample.outputs["output_data_path"],
             "--model-path", train_drift_detector.outputs["model_path"],
             "--model-name", model_drift_detector_name,
             "--learning-rate", drift_detector_learning_rate,
             "--batch-size", drift_detector_batch_size,
             "--steps", drift_detector_steps, 
             "--loss", train_drift_detector.outputs["loss"],
-            "--classes", train_drift_detector.outputs["classes"],
-            "--bucket-name", bucket_name,
         ]
-    ).apply(use_gcp_secret())
+    )
 
-    # 5. Deploy Drift Detector model as endpoint application 
     deploy_drift_detector_to_prod = dsl.ContainerOp(
         name="deploy_drift_detector_to_prod",
-        image=f"hydrosphere/mnist-pipeline-deploy:{tag}",  
+        image=f"{registry}/mnist-pipeline-deploy:{tag}",  
         file_outputs={
-            "application_name": "/application_name.txt",
-            "application_link": "/application_link.txt"
+            "application_name": "/application_name",
+            "application_uri": "/application_uri"
         },
         arguments=[
+            "--data-path", subsample.outputs["output_data_path"],
             "--model-version", release_drift_detector.outputs["model_version"],
-            "--application-name-postfix", "_app", 
+            '--application-name-postfix=-app', 
             "--model-name", model_drift_detector_name,
-            "--bucket-name", bucket_name,
         ],
-    ).apply(use_gcp_secret())
+    )
 
-    # 6. Release MNIST classifier with assigned metrics to Hydrosphere.io platform
     release_model = dsl.ContainerOp(
         name="release_model",
-        image=f"hydrosphere/mnist-pipeline-release-model:{tag}", 
+        image=f"{registry}/mnist-pipeline-release-model:{tag}", 
         file_outputs={
-            "model_version": "/model_version.txt",
-            "model_link": "/model_link.txt"
+            "model_version": "/model_version",
+            "model_uri": "/model_uri"
         },
         arguments=[
             "--drift-detector-app", deploy_drift_detector_to_prod.outputs["application_name"],
             "--model-name", model_name,
-            "--classes", train_model.outputs["classes"],
-            "--bucket-name", bucket_name, 
-            "--data-path", sample.outputs["data_path"],
+            "--data-path", subsample.outputs["output_data_path"],
             "--model-path", train_model.outputs["model_path"],
             "--accuracy", train_model.outputs["accuracy"],
             "--average-loss", train_model.outputs["average_loss"],
@@ -138,60 +215,67 @@ def pipeline_definition(
             "--batch-size", model_batch_size,
             "--epochs", model_epochs,
             "--global-step", train_model.outputs["global_step"],
-            "--mlflow-link", train_model.outputs["mlflow_link"],
         ]
-    ).apply(use_gcp_secret())
+    )
 
-    # 7. Deploy MNIST classifier model as endpoint application on stage for testing purposes
     deploy_model_to_stage = dsl.ContainerOp(
         name="deploy_model_to_stage",
-        image=f"hydrosphere/mnist-pipeline-deploy:{tag}",  
+        image=f"{registry}/mnist-pipeline-deploy:{tag}",  
         file_outputs={
-            "application_name": "/application_name.txt",
-            "application_link": "/application_link.txt"
+            "application_name": "/application_name",
+            "application_uri": "/application_uri"
         },
         arguments=[
+            "--data-path", subsample.outputs["output_data_path"],
             "--model-version", release_model.outputs["model_version"],
-            "--application-name-postfix", "_stage_app", 
+            '--application-name-postfix=-stage-app',  
             "--model-name", model_name,
-            "--bucket-name", bucket_name,
         ],
-    ).apply(use_gcp_secret())
+    )
 
-    # 8. Perform integration testing on the deployed staged application
     test_model = dsl.ContainerOp(
         name="test_model",
-        image=f"hydrosphere/mnist-pipeline-test:{tag}", 
-        arguments=[
-            "--data-path", sample.outputs["data_path"],
-            "--application-name", deploy_model_to_stage.outputs["application_name"], 
-            "--acceptable-accuracy", acceptable_accuracy,
-            "--bucket-name", bucket_name,
-        ],
-    ).apply(use_gcp_secret())
-    test_model.set_retry(3)
-
-    # 9. Deploy MNIST classifier model as endpoint application to production
-    deploy_model_to_prod = dsl.ContainerOp(
-        name="deploy_model_to_prod",
-        image=f"hydrosphere/mnist-pipeline-deploy:{tag}",  
+        image=f"{registry}/mnist-pipeline-test:{tag}", 
         file_outputs={
-            "application_name": "/application_name.txt",
-            "application_link": "/application_link.txt"
+            "integration_test_accuracy": "/integration_test_accuracy",
         },
         arguments=[
-            "--model-version", release_model.outputs["model_version"],
-            "--application-name-postfix", "_app", 
-            "--model-name", model_name,
-            "--bucket-name", bucket_name,
-            "--mlflow-model-link", train_model.outputs["mlflow_link"],
-            "--mlflow-drift-detector-link", train_drift_detector.outputs["mlflow_link"],
-            "--data-path", sample.outputs["data_path"],
-            "--model-path", train_model.outputs["model_path"],
-            "--model-drift-detector-path", train_drift_detector.outputs["model_path"],
+            "--data-path", subsample.outputs["output_data_path"],
+            "--application-name", deploy_model_to_stage.outputs["application_name"], 
+            "--acceptable-accuracy", acceptable_accuracy,
+            "--sample-size", test_sample_size,
         ],
-    ).apply(use_gcp_secret())
-    deploy_model_to_prod.after(test_model)
+    ).set_retry(3)
+
+    deploy_model_to_prod = dsl.ContainerOp(
+        name="deploy_model_to_prod",
+        image=f"{registry}/mnist-pipeline-deploy:{tag}",  
+        file_outputs={
+            "application_name": "/application_name",
+            "application_uri": "/application_uri"
+        },
+        arguments=[
+            "--data-path", subsample.outputs["output_data_path"],
+            "--model-version", release_model.outputs["model_version"],
+            '--application-name-postfix=-app', 
+            "--model-name", model_name,
+        ],
+    ).after(test_model)
+
+    dsl.ContainerOp(
+        name="write_output",
+        image=f"{registry}/mnist-pipeline-output:{tag}", 
+        arguments=[
+            '--data-path', subsample.outputs["output_data_path"],
+            '--model-artifacts-path', train_model.outputs["model_path"], 
+            '--drift-detector-artifacts-path', train_drift_detector.outputs["model_path"],
+            '--model-uri', release_model.outputs["model_uri"],
+            '--drift-detector-uri', release_drift_detector.outputs["model_uri"],
+            '--model-application-uri', deploy_drift_detector_to_prod.outputs["application_uri"],
+            '--drift-detector-application-uri', deploy_model_to_prod.outputs["application_uri"], 
+            '--integration-test-accuracy', test_model.outputs["integration_test_accuracy"],
+        ]
+    )
 
 
 if __name__ == "__main__":
@@ -202,8 +286,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()	
     parser.add_argument('--tag', 
         help="Which tag of image to use, when compiling pipeline", default="latest")
+    parser.add_argument('--registry', 
+        help="Which docker registry to use, when compiling pipeline", default="hydrosphere")
     args = parser.parse_args()
-
-    # Compile pipeline
+    
     tag = args.tag
-    compiler.Compiler().compile(pipeline_definition, "pipeline.tar.gz")
+    registry = args.registry
+    # Compile pipeline
+    compiler.Compiler().compile(pipeline_definition, "subsample.tar.gz")

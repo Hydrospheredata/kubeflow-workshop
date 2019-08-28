@@ -1,16 +1,24 @@
-import os, argparse
-import shutil, urllib, datetime
-import numpy as np
-import tensorflow as tf
-import mlflow
-from decouple import Config, RepositoryEnv
-
-from storage import *
-from orchestrator import *
+import os, argparse, shutil, urllib
+import logging, datetime, re, hashlib, sys
+import numpy as np, tensorflow as tf, mlflow
+from cloud import CloudHelper
 
 
-config = Config(RepositoryEnv("config.env"))
-MLFLOW_LINK = config("MLFLOW_LINK")
+logger = logging.getLogger('tensorflow')
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+file_handler = logging.FileHandler("train_drift_detector.log")
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 def encoder(x, weights, biases):
@@ -25,24 +33,23 @@ def decoder(x, weights, biases):
     return layer_2
 
 
-def main(data_path, learning_rate, steps, batch_size, model_name, bucket_name, storage_path="/"): 
-
-    # Define helper classes
-    storage = Storage(bucket_name)
-    orchestrator = Orchestrator(storage_path=storage_path)
-
-    # Set up environment and variables
-    model_path = os.path.join("model", "mnist-drift-detector", str(round(datetime.datetime.now().timestamp())))
-
-    # Log params into Mlflow
-    mlflow.set_tracking_uri(MLFLOW_LINK)
-    mlflow.set_experiment(f'Default.{model_name}')  # Example usage
-    mlflow.log_params({
-        "data_path": data_path,
-        "learning_rate": learning_rate,
-        "batch_size": batch_size,
-        "steps": steps
-    })
+def main(data_path, model_path, learning_rate, batch_size, steps, *args, **kwargs): 
+    """ 
+    Train pure Tensorflow Autoencoder and upload it to the cloud. 
+    
+    Parameters
+    ----------
+    data_path: str
+        Local path, where training data is stored. 
+    learning_rate: float
+        Learning rate, used to train the model.
+    batch_size: int
+        How much images will be feed at once to the model.
+    steps: int
+        Amount of steps model training process will take.
+    model_path: str
+        Local path, where model artifacts will be stored. 
+    """
 
     # Define network parameters
     num_hidden_1 = 256 
@@ -61,18 +68,15 @@ def main(data_path, learning_rate, steps, batch_size, model_name, bucket_name, s
         'decoder_b1': tf.Variable(tf.random_normal([num_hidden_1])),
         'decoder_b2': tf.Variable(tf.random_normal([num_input])),
     }
-    
-    # Download training/testing data
-    storage.download_file(os.path.join(data_path, "train.npz"), "./train.npz")
-    storage.download_file(os.path.join(data_path, "test.npz"), "./test.npz")
 
     # Prepare data inputs
-    with np.load("./train.npz") as data:
+    with np.load(os.path.join(data_path, "train", "imgs.npz")) as data:
         train_imgs = data["imgs"]
+    with np.load(os.path.join(data_path, "train", "labels.npz")) as data:
         train_labels = data["labels"]
-
-    with np.load("./test.npz") as data:
+    with np.load(os.path.join(data_path, "t10k", "imgs.npz")) as data:
         test_imgs = data["imgs"]
+    with np.load(os.path.join(data_path, "t10k", "labels.npz")) as data:
         test_labels = data["labels"]
 
     imgs = np.expand_dims(np.vstack([train_imgs, test_imgs]), axis=-1)
@@ -107,11 +111,12 @@ def main(data_path, learning_rate, steps, batch_size, model_name, bucket_name, s
         for i in range(1, steps+1):
             batch = sess.run(next_element)[0]
             _, l = sess.run([optimizer, loss], feed_dict={imgs_placeholder: batch})
-
-            if i % 10 == 0:
-                mlflow.log_metric("loss", np.mean(l))
-            if i % 500 == 0 or i == 1:
-                print(f'Step {i}: Minibatch Loss: {np.mean(l)}', flush=True)
+            
+            try:
+                if i % 10 == 0: cloud.log_metrics({"loss": np.mean(l)})
+                if i % 250 == 0 or i == 1: logger.info(f'Step {i}: Loss: {np.mean(l)}')
+            except: 
+                continue
 
         # Save model
         signature_map = {
@@ -133,53 +138,67 @@ def main(data_path, learning_rate, steps, batch_size, model_name, bucket_name, s
             tags=[tf.saved_model.tag_constants.SERVING],
             signature_def_map=signature_map)
         builder.save()
-
-    # Upload files to the cloud
-    for root, dirs, files in os.walk(model_path):
-        for file in files:
-            source_path = os.path.join(root, file)
-            storage.upload_file(source_path, source_path)
-
-    # Export metadata to the orchestrator
-    metrics = {
-        'metrics': [
-            {
-                'name': 'drift-detector-loss',
-                'numberValue': float(np.mean(l)), 
-                'format': "RAW",                
-            },
-        ],
-    }
-
-    mlflow.log_param("model_path", os.path.join(storage.full_name, model_path))
     
-    run = mlflow.active_run()
-    mlflow_link = f"{MLFLOW_LINK}/#/experiments/{run.info.experiment_id}/runs/{run.info.run_id}"
-
-    orchestrator.export_meta("mlpipeline-metrics", metrics, "json")
-    orchestrator.export_meta("model_path", os.path.join(storage.full_name, model_path), "txt")
-    orchestrator.export_meta("loss", np.mean(l), "txt")
-    orchestrator.export_meta("classes", num_classes, "txt")
-    orchestrator.export_meta("mlflow_link", mlflow_link, "txt")
+    return {
+        "loss": float(np.mean(l)),
+    }
 
 
 if __name__ == "__main__": 
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', required=True)
+    parser.add_argument('--model-path', required=True)
     parser.add_argument('--learning-rate', type=float, default=0.01)
-    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--steps', type=int, default=1000)
     parser.add_argument('--batch-size', type=int, default=256)
     parser.add_argument('--model-name', required=True)
-    parser.add_argument('--bucket-name', required=True)
-    
+    parser.add_argument('--dev', action="store_true", default=False)
     args = parser.parse_args()
-    main(
-        data_path=args.data_path,
-        learning_rate=args.learning_rate,
-        steps=args.steps,
-        batch_size=args.batch_size,
-        model_name=args.model_name,
-        bucket_name=args.bucket_name,
+    
+    # Prepare working environment 
+    cloud = CloudHelper(default_config_map_params={"uri.mlflow": "http://mlflow.k8s.hydrosphere.io"})
+    cloud.set_mlflow_endpoint(cloud.get_kube_config_map()["uri.mlflow"])
+    cloud.set_mlflow_experiment(f"Default.{args.model_name}")
+
+    kwargs = dict(vars(args))  # create a copy of the args dict, since we are going to mutate it
+    data_version = re.findall(r'sample-version=(\w+)', args.data_path)[0]
+    model_version = CloudHelper._md5_string("".join(sys.argv))
+    full_model_path = os.path.join(args.model_path, args.model_name, 
+        f"data-version={data_version}", f"model-version={model_version}")
+    
+    # Download training data
+    cloud.download_prefix(args.data_path, args.data_path)
+
+    # Run training
+    kwargs["data_path"] = cloud.get_relative_path_from_uri(args.data_path)
+    kwargs["model_path"] = cloud.get_relative_path_from_uri(args.model_path)
+    result = main(**kwargs, cloud=cloud)
+
+    # Upload artifacts
+    cloud.upload_prefix(kwargs["model_path"], full_model_path)
+    
+    # Log execution
+    params = vars(args)
+    params.update({"model_path": full_model_path})
+    outputs = {
+        "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI
+            "metrics": [
+                {
+                    "name": "loss",
+                    "numberValue": result["loss"],
+                    "format": "RAW"
+                }
+            ]
+        },
+        "model_path": full_model_path,
+    }
+    outputs.update(result)
+    
+    cloud.log_execution(
+        params=params, 
+        outputs=outputs, 
+        logs_path="mnist/logs", 
+        logs_file="train_drift_detector.log",
+        logs_bucket=cloud.get_bucket_from_uri(args.data_path).full_uri,
+        dev=args.dev,
     )
