@@ -8,35 +8,28 @@ This repository shows how to orchestrate a machine learning workflow with [Kubef
 - [Kubeflow](https://www.kubeflow.org/docs/started/getting-started/)
 - [Hydrosphere Serving](https://hydrosphere.io/serving-docs/installation.html#kubernetes)
 
-_Note: All components of Kubeflow by default will be installed into `kubeflow` namespace._
-
-
 ## Repository Structure
 
 ```
-├── Dockerfile         - base image, used for building working steps 
-├── README.md          - this document
-├── bash.sh            - helper script for working with workshop
-├── notebooks          - notebooks for running workshop
-├── requirements.txt   - requiremets for building steps
-├── serverless         - definitions of Lambda functions and Cloud Formation templates for AWS cloud
-├── steps              — actual running steps, that will be executed in the pipeline
-├── utilities          - utility script to work with the cloud, orhcestrator, etc.
+├── notebooks          - notebooks for running workshop and other required operations
+├── steps              - pipeline steps executed in the workflow 
+├── utils              - utility scripts to work with the cloud, orchestrator, etc.
 └── workflows          - definitions of the pipelines
 ```
 
-## Run Workflow
-1. Build and publish all steps of the workflow
+## Operations management
+* Build, test and publish all steps of the workflow
     ```
-    $ ./bash.sh --build-base --build-workers --docker
+    $ REGISTRY=<your_registry> TAG=<tag_of_the_image> make release-all-steps
     ```
-1. Compile origin/subsample pipeline
+* Build and publish all steps of the workflow without testing
     ```
-    $ ./bash.sh --compile-origin
-    $ ./bash.sh --compile-subsample
+    $ REGISTRY=<your_registry> TAG=<tag_of_the_image> make release-all-steps-raw
     ```
-1. Upload compiled pipeline `pipeline.tar.gz` to Kubeflow using UI.
-1. Create an experiment on Kubeflow and start a run. 
+* Compile and submit origin pipeline for execution
+    ```
+    $ EXPERIMENT=Default KUBEFLOW=<kubeflow_instance_uri> make origin
+    ```
 
 ## Help and Support
 [![Join the chat at https://gitter.im/Hydrospheredata/hydro-serving](https://badges.gitter.im/Hydrospheredata/hydro-serving.svg)](https://gitter.im/Hydrospheredata/hydro-serving?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
