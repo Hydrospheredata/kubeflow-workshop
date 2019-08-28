@@ -20,15 +20,15 @@ This repository shows how to orchestrate a machine learning workflow with [Kubef
 ## Operations management
 * Build, test and publish all steps of the workflow
     ```
-    $ REGISTRY=<your_registry> TAG=<tag_of_the_image> make release-all-steps
+    $ make release-all-steps
     ```
 * Build and publish all steps of the workflow without testing
     ```
-    $ REGISTRY=<your_registry> TAG=<tag_of_the_image> make release-all-steps-raw
+    $ make release-all-steps-raw
     ```
 * Compile and submit origin pipeline for execution
     ```
-    $ EXPERIMENT=Default KUBEFLOW=<kubeflow_instance_uri> make origin
+    $ REGISTRY=<your_registry> TAG=<tag_of_the_image> KUBEFLOW=<kubeflow_instance_uri> EXPERIMENT=Default make origin
     ```
 
 ## Help and Support
