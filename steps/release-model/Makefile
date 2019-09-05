@@ -2,15 +2,11 @@ IMAGE_NAME = mnist-pipeline-release-model
 DOCKER_REGISTRY ?= hydrosphere
 TAG ?= latest
 
-all: prepare test-local prepare build-container clean test-container push-container
-release: prepare build-container clean test-container push-container
-release-raw: prepare build-container clean push-container
+all: test-local prepare build-container clean test-container push-container
+release: build-container clean test-container push-container
+release-raw: build-container clean push-container
 
-prepare:
-	@echo Copying local dependencies
-	cp ../../utils/cloud.py .
-
-test-local: prepare
+test-local:
 	@echo Performing local run
 	python3 release_model.py \
 		--drift-detector-app mnist-drift-detector \

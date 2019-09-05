@@ -1,25 +1,14 @@
-import os, json, sys, shutil, tempfile, logging, re
-import tensorflow as tf, numpy as np
+import logging, sys
+
+logging.basicConfig(level=logging.INFO, 
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("train-model.log")])
+logger = logging.getLogger(__name__)
+
+import os, json, shutil, tempfile, re
+import tensorflow as tf, numpy as np, wo
 import urllib.parse, argparse, mlflow, mlflow.tensorflow
 from sklearn.metrics import confusion_matrix
-from cloud import CloudHelper
-
-
-logger = logging.getLogger('tensorflow')
-logger.setLevel(logging.INFO)
-
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
-
-file_handler = logging.FileHandler("train_model.log")
-file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
 
 
 def input_fn(imgs, labels, batch_size=256, shuffle=True):
@@ -142,90 +131,89 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', type=int, default=256)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--dev', action='store_true', default=False)
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    if unknown: 
+        logger.warning(f"Parsed unknown args: {unknown}")
+    kwargs = dict(vars(args)) 
 
-    # Prepare working environment 
-    cloud = CloudHelper(default_config_map_params={"uri.mlflow": "http://mlflow.k8s.hydrosphere.io"})
-    cloud.set_mlflow_endpoint(cloud.get_kube_config_map()["uri.mlflow"])
-    cloud.set_mlflow_experiment(f"Default.{args.model_name}")
-    
-    kwargs = dict(vars(args)) # create a copy of the args dict, since we are going to mutate it
-    data_version = re.findall(r'sample-version=(\w+)', args.data_path)[0]
-    model_version = CloudHelper._md5_string("".join(sys.argv))
-    full_model_path = os.path.join(args.model_path, args.model_name, 
-        f"data-version={data_version}", f"model-version={model_version}")
-
-    # Download training data
-    cloud.download_prefix(args.data_path, args.data_path)
-
-    # Run training
-    kwargs["data_path"] = cloud.get_relative_path_from_uri(args.data_path)
-    kwargs["model_path"] = cloud.get_relative_path_from_uri(args.model_path)
-    result = main(**kwargs)
-
-    # Upload artifacts
-    cloud.upload_prefix(kwargs["model_path"], full_model_path)
-
-    # Log execution
-    # MLflow
-    params = vars(args)
-    params.update({"model_path": full_model_path})
-    # Kubeflow
-    outputs = {
-        "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI
-            "metrics": [
-                {
-                    "name": "accuracy",
-                    "numberValue": result["accuracy"].item(),
-                    "format": "PERCENTAGE"
-                },
-                {
-                    "name": "loss",
-                    "numberValue": result["average_loss"].item(),
-                    "format": "RAW"
-                }
-            ]
+    w = wo.Orchestrator(
+        experiment="Default.kubeflow-mnist",
+        default_logs_path="mnist/logs",
+        default_params={
+            "uri.mlflow": "http://mlflow.k8s.hydrosphere.io"
         },
-        "mlpipeline-ui-metadata.json": {    # mlpipeline-ui-metadata.json lets us enrich Artifacts section of the ComponentOp
-            'outputs': [
-                {
-                    'type': 'tensorboard',
-                    'source': full_model_path,
-                },
-                {
-                    'type': 'table',
-                    'storage': cloud.get_bucket_from_uri(args.model_path).scheme,
-                    'format': 'csv',
-                    'source': os.path.join(full_model_path, "cm.csv"),
-                    'header': [
-                        'one', 'two', 'three', 'four', 'five', 
-                        'six', 'seven', 'eight', 'nine', 'ten'
-                    ],
-                }
-            ]
-        },
-        "model_path": full_model_path,
-    }
-    outputs.update(result)
-    cloud.log_execution(
-        params=params, 
-        outputs=outputs, 
-        logs_path="mnist/logs", 
-        logs_file="train_model.log",
-        logs_bucket=cloud.get_bucket_from_uri(args.data_path).full_uri,
+        use_mlflow=True, 
         dev=args.dev,
     )
+    config = w.get_config()
+    
+    try:
 
-    # # Model artifacts can also be exported into MLFlow instance
-    # mlflow.tensorflow.log_model(
-    #     tf_saved_model_dir=saved_model_path,
-    #     tf_meta_graph_tags=[tf.saved_model.tag_constants.SERVING],
-    #     tf_signature_def_key="predict",
-    #     artifact_path=model_path,
-    # )
+        # Download artifcats
+        w.download_prefix(args.data_path, args.data_path)
 
-    # run = mlflow.active_run()
-    # mlflow_run_uri = f"{mlflow_uri}/#/experiments/{run.info.experiment_id}/runs/{run.info.run_id}"
-    # cloud.export_metas({
-    #     "mlflow_run_uri": mlflow_run_uri,
-    # })
+        # Initialize runtime variables
+        data_version = re.findall(r'sample-version=(\w+)', args.data_path)[0]
+        model_version = wo.utils.io.md5_string("".join(sys.argv))
+        full_model_path = os.path.join(args.model_path, args.model_name, 
+            f"data-version={data_version}", f"model-version={model_version}")
+
+        # Execute main script
+        kwargs["data_path"] = w.parse_path(args.data_path)
+        kwargs["model_path"] = w.parse_path(args.model_path)
+        result = main(**kwargs)
+
+        # Prepare variables for logging
+        scheme, bucket, path = w.parse_uri(args.data_path)
+        params = vars(args)
+        params.update({"model_path": full_model_path})
+
+        outputs = {
+            "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI
+                "metrics": [
+                    {
+                        "name": "accuracy",
+                        "numberValue": result["accuracy"].item(),
+                        "format": "PERCENTAGE"
+                    },
+                    {
+                        "name": "loss",
+                        "numberValue": result["average_loss"].item(),
+                        "format": "RAW"
+                    }
+                ]
+            },
+            "mlpipeline-ui-metadata.json": {    # mlpipeline-ui-metadata.json lets us enrich Artifacts section of the ComponentOp
+                'outputs': [
+                    {
+                        'type': 'tensorboard',
+                        'source': full_model_path,
+                    },
+                    {
+                        'type': 'table',
+                        'storage': scheme,
+                        'format': 'csv',
+                        'source': os.path.join(full_model_path, "cm.csv"),
+                        'header': [
+                            'one', 'two', 'three', 'four', 'five', 
+                            'six', 'seven', 'eight', 'nine', 'ten'
+                        ],
+                    }
+                ]
+            },
+            "model_path": full_model_path,
+        }
+        outputs.update(result)
+
+        # Upload artifacts
+        w.upload_prefix(kwargs["model_path"], full_model_path)
+        
+    except Exception as e:
+        logger.exception("Main execution script failed")
+    
+    finally: 
+        w.log_execution(
+            params=params, outputs=outputs, 
+            logs_file="train-model.log",
+            logs_bucket=f"{scheme}://{bucket}",
+        )   

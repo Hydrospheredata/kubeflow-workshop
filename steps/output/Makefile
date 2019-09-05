@@ -2,15 +2,11 @@ IMAGE_NAME = mnist-pipeline-output
 DOCKER_REGISTRY ?= hydrosphere
 TAG ?= latest
 
-all: prepare test-local prepare build-container clean test-container push-container
-release: prepare build-container clean test-container push-container
-release-raw: prepare build-container clean push-container
+all: test-local prepare build-container clean test-container push-container
+release: build-container clean test-container push-container
+release-raw: build-container clean push-container
 
-prepare:
-	@echo Copying local dependencies
-	cp ../../utils/cloud.py .
-
-test-local: prepare
+test-local: 
 	@echo Performing local run
 	python3 output.py \
 		--data-path s3://workshop-hydrosphere/mnist/data/sample-version=13e4e7f62eb6ac60e44c2094a6cd86b7/ \

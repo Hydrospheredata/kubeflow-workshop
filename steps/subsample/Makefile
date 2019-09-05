@@ -2,19 +2,15 @@ IMAGE_NAME = mnist-pipeline-subsample
 DOCKER_REGISTRY ?= hydrosphere
 TAG ?= latest
 
-all: prepare test-local prepare build-container clean test-container push-container
-release: prepare build-container clean test-container push-container
-release-raw: prepare build-container clean push-container
+all: test-local prepare build-container clean test-container push-container
+release: test-local build-container clean push-container
+release-raw: build-container clean push-container
 
-prepare:
-	@echo Copying local dependencies
-	cp ../../utils/cloud.py .
-
-test-local: prepare
+test-local: 
 	@echo Performing local run
 	python3 subsample.py \
 		--output-data-path s3://workshop-hydrosphere/mnist/data \
-		--application-name mnist_app \
+		--application-name kubeflow-mnist-app \
 		--dev
 
 # DOCKER_BUILD_OPTS env var can be used to configure build step
@@ -27,7 +23,7 @@ test-container:
 	docker run -v ~/.aws:/root/.aws \
 		$(DOCKER_REGISTRY)/$(IMAGE_NAME):$(TAG) \
 		--output-data-path s3://workshop-hydrosphere/mnist/data \
-		--application-name mnist_app \
+		--application-name kubeflow-mnist-app \
 		--dev
 
 push-container: 

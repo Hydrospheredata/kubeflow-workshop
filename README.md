@@ -17,6 +17,30 @@ This repository shows how to orchestrate a machine learning workflow with [Kubef
 └── workflows          - definitions of the pipelines
 ```
 
+## Configuration
+
+In order to configure execution of this workflow you have to deploy ConfigMap resource in the same namespace, where your Kubeflow instance is running. Structure of this ConfigMap should be as following:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mnist-workflow
+data:
+  "default.tensorflow_runtime": "hydrosphere/serving-runtime-tensorflow-1.13.1:dev"
+  "postgres.dbname": "postgres"
+  "postgres.host": "postgres"
+  "postgres.pass": "postgres"
+  "postgres.port": "5432"
+  "postgres.user": "postgres"
+  "influx.host": "influxdb"
+  "influx.port": "8086"
+  "uri.hydrosphere": "https://<hydrosphere>"
+  "uri.reqstore": "https://<hydrosphere>/reqstore"
+  "uri.mlflow": "http://<mlflow>"
+  "uri.mnist": "http://yann.lecun.com/exdb/mnist/"
+```
+
 ## Operations management
 * Build, test and publish all steps of the workflow
     ```
@@ -28,7 +52,7 @@ This repository shows how to orchestrate a machine learning workflow with [Kubef
     ```
 * Compile and submit origin pipeline for execution
     ```
-    $ REGISTRY=<your_registry> TAG=<tag_of_the_image> KUBEFLOW=<kubeflow_instance_uri> EXPERIMENT=Default make origin
+    $ REGISTRY=<your_registry> TAG=<tag_of_the_image> KUBEFLOW=<kubeflow_instance_uri> EXPERIMENT=Default CONFIGMAP=mnist-workflow make origin
     ```
 
 ## Help and Support

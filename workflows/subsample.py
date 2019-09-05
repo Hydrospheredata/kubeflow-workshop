@@ -49,7 +49,11 @@ def use_config_map(name, mount_path="/etc/config"):
 
 
 def apply_config_map_and_aws_secret(op):
-    return op.apply(use_config_map("mnist-workflow")).apply(use_aws_secret())
+    return (op 
+        .apply(use_config_map(configmap))
+        .apply(use_aws_secret())
+        .set_image_pull_policy('Always')
+    )
 
 
 @dsl.pipeline(name="MNIST", description="MNIST Workflow Example")
@@ -285,12 +289,16 @@ if __name__ == "__main__":
     # Get parameters	
     parser = argparse.ArgumentParser()	
     parser.add_argument('--tag', 
-        help="Which tag of image to use, when compiling pipeline", default="latest")
+        help="Which tag of image to use, when compiling pipeline", default="v2")
     parser.add_argument('--registry', 
         help="Which docker registry to use, when compiling pipeline", default="hydrosphere")
+    parser.add_argument('-c', '--configmap', 
+        help="Which ConfigMap to use, when executing pipeline", default="mnist-workflow")
     args = parser.parse_args()
     
     tag = args.tag
     registry = args.registry
+    configmap = args.configmap
+
     # Compile pipeline
     compiler.Compiler().compile(pipeline_definition, "subsample.tar.gz")

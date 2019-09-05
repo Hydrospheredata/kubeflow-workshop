@@ -1,27 +1,15 @@
-import requests, psycopg2, tqdm
-import pickle, os, random, urllib.parse, logging, sys
-import numpy as np
-import datetime, argparse, hashlib
-from hydro_serving_grpc.reqstore.reqstore_client import ReqstoreHttpClient
-from cloud import CloudHelper
-
+import logging, sys
 
 logging.basicConfig(level=logging.INFO, 
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("subsample.log")])
 logger = logging.getLogger(__name__)
 
-
-def md5(filenames: list):
-    """ Get md5 hash of the given files """
-
-    hash_md5 = hashlib.md5()
-    for filename in filenames:
-        with open(filename, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-
-    return hash_md5.hexdigest()
+import requests, psycopg2, tqdm
+import pickle, os, random, urllib.parse
+import numpy as np, wo
+import datetime, argparse, hashlib
+from hydro_serving_grpc.reqstore.reqstore_client import ReqstoreHttpClient
 
 
 def get_model_versions(host_uri, application_name):
@@ -113,7 +101,7 @@ def main(postgres_uri, reqstore_uri, hydrosphere_uri, application_name, limit, t
     np.savez_compressed("data/t10k/labels.npz", labels=test_labels)
 
     logger.debug("Calculating md5 hash")
-    sample_version = md5([
+    sample_version = wo.utils.io.md5_files([
         "data/train/imgs.npz", "data/train/labels.npz",
         "data/t10k/imgs.npz", "data/t10k/labels.npz",
     ])
@@ -131,25 +119,30 @@ if __name__ == "__main__":
     parser.add_argument('--train-part', type=float, default=0.7)
     parser.add_argument('--validation-part', type=float, default=0.1)
     parser.add_argument('--dev', action="store_true", default=False)
+    args, unknown = parser.parse_known_args()
+    if unknown: 
+        logger.warning(f"Parsed unknown args: {unknown}")
+    kwargs = dict(vars(args))
 
-    cloud = CloudHelper(
+    w = wo.Orchestrator(
         default_logs_path="mnist/logs",
-        default_config_map_params={
-            "postgres.host": "postgres.hydro-serving-dev",
+        default_params={
+            "postgres.host": "localhost",
             "postgres.port": "5432", 
             "postgres.user": "serving",
             "postgres.pass": "hydro-serving",
             "postgres.dbname": "serving",
-            "uri.hydrosphere": "https://dev.k8s.hydrosphere.io",
-            "uri.reqstore": "https://dev.k8s.hydrosphere.io/reqstore"
+            "uri.hydrosphere": "https://tm.k8s.hydrosphere.io",
+            "uri.reqstore": "https://tm.k8s.hydrosphere.io/reqstore"
         },
+        dev=args.dev,
     )
-    config = cloud.get_kube_config_map()
-    args, unknown = parser.parse_known_args()
-    if args.dev: logger.setLevel(logging.DEBUG)
-    if unknown: logger.warning(f"Parsed unknown args: {unknown}")
+    config = w.get_config()
     
     try:
+
+        # Download artifacts
+        pass
 
         # Initialize runtime variables
         postgres_uri = f"postgresql://{config['postgres.user']}:{config['postgres.pass']}" \
@@ -165,23 +158,21 @@ if __name__ == "__main__":
             args.train_part,
             args.validation_part,
         )
-        
+
         # Prepare variables for logging
         output_data_path = os.path.join(
             args.output_data_path, f"sample-version={result['sample_version']}")
 
-        # Upload artifacts to the cloud
-        cloud.upload_prefix("data", output_data_path)
+        # Upload artifacts 
+        w.upload_prefix("data", output_data_path)
         
     except Exception as e:
-        logger.exception("Main execution script failed.")
+        logger.exception("Main execution script failed")
     
     finally: 
-        cloud.log_execution(
-            outputs={
-                "output_data_path": output_data_path,
-            },
-            logs_bucket=cloud.get_bucket_from_uri(args.output_data_path).full_uri,
+        scheme, bucket, path = w.parse_uri(args.output_data_path)
+        w.log_execution(
+            outputs={"output_data_path": output_data_path},
+            logs_bucket=f"{scheme}://{bucket}",
             logs_file="subsample.log",
-            dev=args.dev,
         )

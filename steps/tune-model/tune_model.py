@@ -1,8 +1,5 @@
 import boto3, botocore, sagemaker as sagemaker_library
 import os, json, datetime, argparse
-from cloud import CloudHelper
- 
-
 
 
 def main(
@@ -119,16 +116,16 @@ def main(
     best_job_summary = sagemaker_client.describe_hyper_parameter_tuning_job(
         HyperParameterTuningJobName=tuning_job_name)["BestTrainingJob"]
     
-    cloud.export_metas(best_job_summary["TunedHyperParameters"], key_prefix="best_")
-    cloud.export_metas(best_job_summary["FinalHyperParameterTuningJobObjectiveMetric"], key_prefix="objective_")
-    cloud.export_metas({
-        "tuning_job_name": tuning_job_name, 
+    # cloud.export_metas(best_job_summary["TunedHyperParameters"], key_prefix="best_")
+    # cloud.export_metas(best_job_summary["FinalHyperParameterTuningJobObjectiveMetric"], key_prefix="objective_")
+    # cloud.export_metas({
+    #     "tuning_job_name": tuning_job_name, 
         
-        "best_training_job_name": best_job_summary["TrainingJobName"],
-        "creation_time": best_job_summary["CreationTime"],
-        "training_start_time": best_job_summary["TrainingStartTime"],
-        "training_end_time": best_job_summary["TrainingEndTime"],
-    })
+    #     "best_training_job_name": best_job_summary["TrainingJobName"],
+    #     "creation_time": best_job_summary["CreationTime"],
+    #     "training_start_time": best_job_summary["TrainingStartTime"],
+    #     "training_end_time": best_job_summary["TrainingEndTime"],
+    # })
 
 
 if __name__ == "__main__": 
