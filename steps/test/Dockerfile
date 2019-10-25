@@ -4,7 +4,7 @@ RUN pip install --upgrade pip
 RUN pip install boto3~=1.9.197
 RUN pip install numpy==1.16.2
 RUN pip install requests~=2.22.0
-RUN pip install wo~=0.1.3.post4
+RUN pip install wo~=0.1.5
 
 COPY *.py /src/
 WORKDIR /src/
