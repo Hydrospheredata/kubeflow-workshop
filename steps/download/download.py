@@ -1,8 +1,9 @@
-import logging, sys
+import logging, sys, os
 
+os.makedirs("logs", exist_ok=True)
 logging.basicConfig(level=logging.INFO, 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("download.log")])
+    format="%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s.%(lineno)d - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("logs/step_download.log")])
 logger = logging.getLogger(__name__)
 
 import os, gzip, tarfile, wo
@@ -11,25 +12,13 @@ import urllib, urllib.parse, urllib.request
 import datetime, argparse, numpy
 from PIL import Image
 
-
+INPUTS_DIR, OUTPUTS_DIR = "inputs/", "outputs/"
 filenames = [
     'train-images-idx3-ubyte.gz',
     'train-labels-idx1-ubyte.gz',
     't10k-images-idx3-ubyte.gz',
     't10k-labels-idx1-ubyte.gz'
 ]
-
-
-def md5(filenames: list):
-    """ Get md5 hash of the given files """
-
-    hash_md5 = hashlib.md5()
-    for filename in filenames:
-        with open(filename, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-
-    return hash_md5.hexdigest()
 
 
 def download_files(base_url, filenames=None):
@@ -83,21 +72,32 @@ def write_data(imgs: numpy.ndarray, labels: numpy.ndarray, directory: str):
     numpy.savez_compressed(os.path.join(directory, "imgs.npz"), imgs=imgs)
     numpy.savez_compressed(os.path.join(directory, "labels.npz"), labels=labels)
     
-    return md5([os.path.join(directory, "imgs.npz"), os.path.join(directory, "labels.npz")])
+    return wo.utils.io.md5_files([
+        os.path.join(directory, "imgs.npz"), 
+        os.path.join(directory, "labels.npz")
+    ])
 
 
 def main(uri):
     """ Download MNIST data, process it and upload it to the cloud. """
 
     download_files(uri)
+
     imgs, labels = process_images("train")
     train_md5 = write_data(imgs, labels, "data/train")
     imgs, labels = process_images("t10k")
     test_md5 = write_data(imgs, labels, "data/t10k")
 
-    return {
-        "sample_version": wo.utils.io.md5_string(train_md5 + test_md5)
-    }
+    sample_version = wo.utils.io.md5_string(train_md5 + test_md5)
+    output_directory = os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}")
+    if os.path.exists(output_directory):
+        logger.warning(f"Directory {output_directory} already exists")
+        logger.warning(f"Cleaning {output_directory} from the old files")
+        shutil.rmtree(os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}"))
+    
+    shutil.move("data/train", os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}"))
+    shutil.move("data/t10k", os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}"))
+    return {"sample_version": sample_version}
 
 
 if __name__ == "__main__": 
@@ -108,42 +108,18 @@ if __name__ == "__main__":
     if unknown: 
         logger.warning(f"Parsed unknown args: {unknown}")
 
-    w = wo.Orchestrator(
-        default_logs_path="mnist/logs",
-        default_params={
-            "uri.mnist": "http://yann.lecun.com/exdb/mnist/"
-        },
+    with wo.Orchestrator(
+        outputs=[(OUTPUTS_DIR, args.output_data_path)],
+        default_params={"uri.mnist": "http://yann.lecun.com/exdb/mnist/"},
+        logs_file="logs/step_download.log",
+        logs_bucket=wo.parse_bucket(args.output_data_path, with_scheme=True),
         dev=args.dev,
-    )
-    config = w.get_config()
-    
-    try:
+    ) as orchestrator:
 
-        # Download artifacts
-        pass
-
-        # Initialize runtime variables
-        pass 
-
-        # Execute main script
+        # Main script execution
+        config = orchestrator.get_config()
         result = main(uri=config["uri.mnist"])
 
-        # Prepare variables for logging
-        output_data_path = os.path.join(
-            args.output_data_path, f"sample-version={result['sample_version']}")
-
-        # Upload artifacts
-        pass 
-        
-    except Exception as e:
-        logger.exception("Main execution script failed")
-    
-    finally: 
-        scheme, bucket, path = w.parse_uri(args.output_data_path)
-        w.log_execution(
-            outputs={
-                "output_data_path": output_data_path,
-            },
-            logs_bucket=f"{scheme}://{bucket}",
-            logs_file="download.log",
-        )
+        # Execution logging
+        orchestrator.log_execution(
+            outputs={"output_data_path": os.path.join(args.output_data_path, result["sample_version"])})
