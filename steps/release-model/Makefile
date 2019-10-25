@@ -1,6 +1,9 @@
 IMAGE_NAME = mnist-pipeline-release-model
 DOCKER_REGISTRY ?= hydrosphere
 TAG ?= latest
+BUCKET ?= s3://workshop-hydrosphere-mnist
+SAMPLE_VERSION ?= sample-version=13e4e7f62eb6ac60e44c2094a6cd86b7
+MODEL_VERSION ?= model-version=d4dad601fb9cdbb8fac3ab642ee51741
 
 all: test-local prepare build-container clean test-container push-container
 release: build-container clean test-container push-container
@@ -11,8 +14,8 @@ test-local:
 	python3 release_model.py \
 		--drift-detector-app mnist-drift-detector \
 		--model-name mnist \
-		--data-path s3://workshop-hydrosphere/mnist/data/sample-version=13e4e7f62eb6ac60e44c2094a6cd86b7/ \
-		--model-path s3://workshop-hydrosphere/mnist/model/mnist/data-version=13e4e7f62eb6ac60e44c2094a6cd86b7/model-version=b20dd8dbdee1deae0dd0704f2238df27 \
+		--data-path $(BUCKET)/data/$(SAMPLE_VERSION)/ \
+		--model-path $(BUCKET)/model/mnist/$(SAMPLE_VERSION)/$(MODEL_VERSION)/ \
 		--accuracy 0.9639000296592712 \
 		--learning-rate 0.01 \
 		--batch-size 64 \
@@ -33,8 +36,8 @@ test-container:
 		$(DOCKER_REGISTRY)/$(IMAGE_NAME):$(TAG) \
 		--drift-detector-app mnist-drift-detector \
 		--model-name mnist \
-		--data-path s3://workshop-hydrosphere/mnist/data/sample-version=13e4e7f62eb6ac60e44c2094a6cd86b7/ \
-		--model-path s3://workshop-hydrosphere/mnist/model/mnist/data-version=13e4e7f62eb6ac60e44c2094a6cd86b7/model-version=b20dd8dbdee1deae0dd0704f2238df27 \
+		--data-path $(BUCKET)/data/$(SAMPLE_VERSION)/ \
+		--model-path $(BUCKET)/model/mnist/$(SAMPLE_VERSION)/$(MODEL_VERSION)/ \
 		--accuracy 0.9639000296592712 \
 		--learning-rate 0.01 \
 		--batch-size 64 \
@@ -50,6 +53,21 @@ push-container:
 
 clean:
 	@echo Cleaning folder
-	rm -rf data cloud.py *.log data_path model_path model_uri model_version \
-		learning_rate epochs git.branch* git.is-dirty accuracy batch_size mnist .hs \
-		average_loss global_step loss 
+	rm -rf logs
+	rm -rf inputs
+	rm -rf outputs
+	rm -rf git.*
+	rm -rf batch_size 
+	rm -rf learning_rate
+	rm -rf loss
+	rm -rf data_path
+	rm -rf model_path
+	rm -rf model_name
+	rm -rf model_uri
+	rm -rf model_version
+	rm -rf global_step
+	rm -rf epochs 
+	rm -rf accuracy
+	rm -rf average_loss
+	rm -rf drift_detector_app
+	rm -rf .hs
