@@ -1,8 +1,10 @@
-import logging, sys
+import logging, sys, os
 
+os.makedirs("logs", exist_ok=True)
+logs_file = "logs/step_train_model.log"
 logging.basicConfig(level=logging.INFO, 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("train-model.log")])
+    format="%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s.%(lineno)d - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("logs/step_train_model.log")])
 logger = logging.getLogger(__name__)
 
 import os, json, shutil, tempfile, re
@@ -10,6 +12,10 @@ import tensorflow as tf, numpy as np, wo
 import urllib.parse, argparse, mlflow, mlflow.tensorflow
 from sklearn.metrics import confusion_matrix
 
+
+INPUTS_DIR, OUTPUTS_DIR = "inputs/", "outputs/"
+os.makedirs(INPUTS_DIR, exist_ok=True)
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
 def input_fn(imgs, labels, batch_size=256, shuffle=True):
     return tf.estimator.inputs.numpy_input_fn(
@@ -62,7 +68,7 @@ def _prettify_folder_structure(model_dir, export_model_path):
     return final_dir
 
 
-def main(data_path, model_path, learning_rate, batch_size, epochs, *args, **kwargs):
+def main(data_path, model_path, learning_rate, batch_size, epochs, full_model_path, *args, **kwargs):
     """ 
     Train tf.estimator.DNNClassifier for classifying MNIST digits. 
     
@@ -72,6 +78,9 @@ def main(data_path, model_path, learning_rate, batch_size, epochs, *args, **kwar
         Path to directory, where training data is located.
     model_path: str
         Path to directory, where model should be exported.
+    full_model_path: str
+        Local path with respect to sample/model version, where model 
+        artifacts will be stored.
     learning_rate: float
         Learning rate, used for training the model.
     batch_size: float
@@ -82,13 +91,13 @@ def main(data_path, model_path, learning_rate, batch_size, epochs, *args, **kwar
     tf.logging.set_verbosity(tf.logging.INFO)
 
     # Prepare data inputs
-    with np.load(os.path.join(data_path, "train", "imgs.npz")) as np_imgs:
+    with np.load(os.path.join(INPUTS_DIR, "train", "imgs.npz")) as np_imgs:
         train_imgs = np_imgs["imgs"]
-    with np.load(os.path.join(data_path, "train", "labels.npz")) as np_labels:
+    with np.load(os.path.join(INPUTS_DIR, "train", "labels.npz")) as np_labels:
         train_labels = np_labels["labels"].astype(int)
-    with np.load(os.path.join(data_path, "t10k", "imgs.npz")) as np_imgs:
+    with np.load(os.path.join(INPUTS_DIR, "t10k", "imgs.npz")) as np_imgs:
         test_imgs = np_imgs["imgs"]
-    with np.load(os.path.join(data_path, "t10k", "labels.npz")) as np_labels:
+    with np.load(os.path.join(INPUTS_DIR, "t10k", "labels.npz")) as np_labels:
         test_labels = np_labels["labels"].astype(int)
 
     train_fn = input_fn(train_imgs, train_labels, batch_size=batch_size, shuffle=True)
@@ -98,7 +107,7 @@ def main(data_path, model_path, learning_rate, batch_size, epochs, *args, **kwar
 
     # Create the model
     estimator = tf.estimator.DNNClassifier(
-        model_dir=model_path,
+        model_dir=full_model_path,
         n_classes=num_classes,
         hidden_units=[256, 64],
         feature_columns=[img_feature_column],
@@ -108,15 +117,15 @@ def main(data_path, model_path, learning_rate, batch_size, epochs, *args, **kwar
     # Train and evaluate the model
     evaluation = estimator.train(train_fn).evaluate(test_fn)
     cm = _calculate_confusion_matrix(test_imgs, test_labels, estimator)
-    np.savetxt(os.path.join(model_path, "cm.csv"), cm, fmt='%d', delimiter=',')
+    np.savetxt(os.path.join(full_model_path, "cm.csv"), cm, fmt='%d', delimiter=',')
 
     # Export the model 
     serving_input_receiver_fn = tf.estimator.export \
         .build_raw_serving_input_receiver_fn({
             "imgs": tf.placeholder(tf.float32, shape=(None, 28, 28, 1))})
     saved_model_path = estimator.export_saved_model(
-        model_path, serving_input_receiver_fn).decode()
-    _prettify_folder_structure(model_path, saved_model_path)
+        full_model_path, serving_input_receiver_fn).decode()
+    _prettify_folder_structure(full_model_path, saved_model_path)
 
     evaluation.update({"num_classes": num_classes})
     return evaluation
@@ -134,86 +143,62 @@ if __name__ == "__main__":
     args, unknown = parser.parse_known_args()
     if unknown: 
         logger.warning(f"Parsed unknown args: {unknown}")
-    kwargs = dict(vars(args)) 
 
-    w = wo.Orchestrator(
-        experiment="Default.kubeflow-mnist",
-        default_logs_path="mnist/logs",
-        default_params={
-            "uri.mlflow": "http://mlflow.k8s.hydrosphere.io"
-        },
-        use_mlflow=True, 
-        dev=args.dev,
-    )
-    config = w.get_config()
-    
-    try:
+    inputs = [(args.data_path, INPUTS_DIR)]
+    outputs = [(OUTPUTS_DIR, args.model_path)]
+    logs_bucket = wo.parse_bucket(args.data_path, with_scheme=True)
+    experiment = "Default.kubeflow-mnist"
+    params = {"uri.mlflow": "http://mlflow.k8s.hydrosphere.io"}
 
-        # Download artifcats
-        w.download_prefix(args.data_path, args.data_path)
+
+    with wo.Orchestrator(inputs=inputs, outputs=outputs,
+        logs_file=logs_file, logs_bucket=logs_bucket,
+        experiment=experiment, default_params=params,
+        mlflow=True, dev=args.dev) as w:
 
         # Initialize runtime variables
-        data_version = re.findall(r'sample-version=(\w+)', args.data_path)[0]
+        sample_version = re.findall(r'sample-version=(\w+)', args.data_path)[0]
         model_version = wo.utils.io.md5_string("".join(sys.argv))
-        full_model_path = os.path.join(args.model_path, args.model_name, 
-            f"data-version={data_version}", f"model-version={model_version}")
+        model_path = os.path.join(args.model_name, 
+            f"sample-version={sample_version}", f"model-version={model_version}")
 
         # Execute main script
-        kwargs["data_path"] = w.parse_path(args.data_path)
-        kwargs["model_path"] = w.parse_path(args.model_path)
-        result = main(**kwargs)
+        result = main(**vars(args), full_model_path=os.path.join(OUTPUTS_DIR, model_path))
 
-        # Prepare variables for logging
-        scheme, bucket, path = w.parse_uri(args.data_path)
-        params = vars(args)
-        params.update({"model_path": full_model_path})
-
-        outputs = {
-            "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI
-                "metrics": [
-                    {
-                        "name": "accuracy",
-                        "numberValue": result["accuracy"].item(),
-                        "format": "PERCENTAGE"
-                    },
-                    {
-                        "name": "loss",
-                        "numberValue": result["average_loss"].item(),
-                        "format": "RAW"
-                    }
-                ]
-            },
-            "mlpipeline-ui-metadata.json": {    # mlpipeline-ui-metadata.json lets us enrich Artifacts section of the ComponentOp
-                'outputs': [
-                    {
-                        'type': 'tensorboard',
-                        'source': full_model_path,
-                    },
-                    {
-                        'type': 'table',
-                        'storage': scheme,
-                        'format': 'csv',
-                        'source': os.path.join(full_model_path, "cm.csv"),
-                        'header': [
-                            'one', 'two', 'three', 'four', 'five', 
-                            'six', 'seven', 'eight', 'nine', 'ten'
-                        ],
-                    }
-                ]
-            },
-            "model_path": full_model_path,
-        }
-        outputs.update(result)
-
-        # Upload artifacts
-        w.upload_prefix(kwargs["model_path"], full_model_path)
-        
-    except Exception as e:
-        logger.exception("Main execution script failed")
-    
-    finally: 
         w.log_execution(
-            params=params, outputs=outputs, 
-            logs_file="train-model.log",
-            logs_bucket=f"{scheme}://{bucket}",
-        )   
+            outputs={
+                "model_path": os.path.join(args.model_path, model_version), 
+                "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI
+                    "metrics": [
+                        {
+                            "name": "accuracy",
+                            "numberValue": result["accuracy"].item(),
+                            "format": "PERCENTAGE"
+                        },
+                        {
+                            "name": "loss",
+                            "numberValue": result["average_loss"].item(),
+                            "format": "RAW"
+                        }
+                    ]
+                },
+                "mlpipeline-ui-metadata.json": {    # mlpipeline-ui-metadata.json lets us enrich Artifacts section of the ComponentOp
+                    'outputs': [
+                        {
+                            'type': 'tensorboard',
+                            'source': os.path.join(args.model_path, model_version),
+                        },
+                        {
+                            'type': 'table',
+                            'storage': 's3',
+                            'format': 'csv',
+                            'source': os.path.join(args.model_path, model_version, "cm.csv"),
+                            'header': [
+                                'one', 'two', 'three', 'four', 'five', 
+                                'six', 'seven', 'eight', 'nine', 'ten'
+                            ],
+                        }
+                    ]
+                },
+            },
+        )
