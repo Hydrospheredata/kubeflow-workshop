@@ -1,13 +1,19 @@
-import logging, sys
+import logging, sys, os
 
+os.makedirs("logs", exist_ok=True)
+logs_file = "logs/step_train_drift_detector.log"
 logging.basicConfig(level=logging.INFO, 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("train-drift-detector.log")])
+    format="%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s.%(lineno)d - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logs_file)])
 logger = logging.getLogger(__name__)
 
 import os, argparse, shutil, urllib
 import datetime, re, hashlib
 import numpy as np, tensorflow as tf, wo
+
+INPUTS_DIR, OUTPUTS_DIR = "inputs", "outputs"
+os.makedirs(INPUTS_DIR, exist_ok=True)
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
 
 def encoder(x, weights, biases):
@@ -22,7 +28,7 @@ def decoder(x, weights, biases):
     return layer_2
 
 
-def main(data_path, model_path, learning_rate, batch_size, steps, *args, **kwargs): 
+def main(data_path, model_path, learning_rate, batch_size, steps, full_model_path, *args, **kwargs): 
     """ 
     Train pure Tensorflow Autoencoder and upload it to the cloud. 
     
@@ -38,6 +44,9 @@ def main(data_path, model_path, learning_rate, batch_size, steps, *args, **kwarg
         Amount of steps model training process will take.
     model_path: str
         Local path, where model artifacts will be stored. 
+    full_model_path: str
+        Local path with respect to sample/model version, where model 
+        artifacts will be stored. 
     """
 
     # Define network parameters
@@ -59,13 +68,13 @@ def main(data_path, model_path, learning_rate, batch_size, steps, *args, **kwarg
     }
 
     # Prepare data inputs
-    with np.load(os.path.join(data_path, "train", "imgs.npz")) as data:
+    with np.load(os.path.join(INPUTS_DIR, "train", "imgs.npz")) as data:
         train_imgs = data["imgs"]
-    with np.load(os.path.join(data_path, "train", "labels.npz")) as data:
+    with np.load(os.path.join(INPUTS_DIR, "train", "labels.npz")) as data:
         train_labels = data["labels"]
-    with np.load(os.path.join(data_path, "t10k", "imgs.npz")) as data:
+    with np.load(os.path.join(INPUTS_DIR, "t10k", "imgs.npz")) as data:
         test_imgs = data["imgs"]
-    with np.load(os.path.join(data_path, "t10k", "labels.npz")) as data:
+    with np.load(os.path.join(INPUTS_DIR, "t10k", "labels.npz")) as data:
         test_labels = data["labels"]
 
     imgs = np.expand_dims(np.vstack([train_imgs, test_imgs]), axis=-1)
@@ -101,9 +110,8 @@ def main(data_path, model_path, learning_rate, batch_size, steps, *args, **kwarg
             batch = sess.run(next_element)[0]
             _, l = sess.run([optimizer, loss], feed_dict={imgs_placeholder: batch})
             
-            try:
+            try:  # in case, MLFlow instance is not available
                 if i % 10 == 0: w.log_execution(metrics={"loss": np.mean(l)})
-                if i % 250 == 0 or i == 1: logger.info(f'Step {i}: Loss: {np.mean(l)}')
             except: 
                 continue
 
@@ -120,8 +128,8 @@ def main(data_path, model_path, learning_rate, batch_size, steps, *args, **kwarg
                 outputs={"score": score})
         }
 
-        shutil.rmtree(model_path, ignore_errors=True) # in case folder exists 
-        builder = tf.saved_model.builder.SavedModelBuilder(model_path)
+        shutil.rmtree(full_model_path, ignore_errors=True) # in case folder exists 
+        builder = tf.saved_model.builder.SavedModelBuilder(full_model_path)
         builder.add_meta_graph_and_variables(
             sess=sess, 
             tags=[tf.saved_model.tag_constants.SERVING],
@@ -145,63 +153,39 @@ if __name__ == "__main__":
     args, unknown = parser.parse_known_args()
     if unknown: 
         logger.warning(f"Parsed unknown args: {unknown}")
-    kwargs = dict(vars(args)) 
 
-    w = wo.Orchestrator(
-        experiment="Default.kubeflow-mnist-drift-detector",
-        default_logs_path="mnist/logs",
-        default_params={
-            "uri.mlflow": "http://mlflow.k8s.hydrosphere.io"
-        },
-        use_mlflow=True, 
-        dev=args.dev,
-    )
-    config = w.get_config()
-    
-    try:
-        
-        # Download artifacts
-        w.download_prefix(args.data_path, args.data_path)
+    inputs = [(args.data_path, INPUTS_DIR)]
+    outputs = [(OUTPUTS_DIR, args.model_path)]
+    logs_bucket = wo.parse_bucket(args.data_path, with_scheme=True)
+    experiment = "Default.kubeflow-mnist-drift-detector"
+    params = {"uri.mlflow": "http://mlflow.k8s.hydrosphere.io"}
+
+    with wo.Orchestrator(inputs=inputs, outputs=outputs,
+        logs_file=logs_file, logs_bucket=logs_bucket,
+        experiment=experiment, default_params=params,
+        mlflow=True, dev=args.dev) as w:
 
         # Initialize runtime variables
         data_version = re.findall(r'sample-version=(\w+)', args.data_path)[0]
         model_version = wo.utils.io.md5_string("".join(sys.argv))
-        full_model_path = os.path.join(args.model_path, args.model_name, 
-            f"data-version={data_version}", f"model-version={model_version}")
+        model_path = os.path.join(args.model_name, 
+            f"sample-version={data_version}", f"model-version={model_version}")
 
         # Execute main script
-        kwargs["data_path"] = w.parse_path(args.data_path)
-        kwargs["model_path"] = w.parse_path(args.model_path)
-        result = main(**kwargs)
+        result = main(**vars(args), full_model_path=os.path.join(OUTPUTS_DIR, model_path))
 
-        # Prepare variables for logging
-        scheme, bucket, path = w.parse_uri(args.data_path)
-        params = vars(args)
-        params.update({"model_path": full_model_path})
-
-        outputs = {
-            "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI
-                "metrics": [
-                    {
-                        "name": "loss",
-                        "numberValue": result["loss"],
-                        "format": "RAW"
-                    }
-                ]
-            },
-            "model_path": full_model_path,
-        }
-        outputs.update(result)
-
-        # Upload artifacts
-        w.upload_prefix(kwargs["model_path"], full_model_path)
-        
-    except Exception as e:
-        logger.exception("Main execution script failed")
-    
-    finally: 
+        # Execution logging
         w.log_execution(
-            params=params, outputs=outputs, 
-            logs_file="train-drift-detector.log",
-            logs_bucket=f"{scheme}://{bucket}",
-        )   
+            outputs={
+                "model_path": os.path.join(args.model_path, model_path),
+                "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI
+                    "metrics": [
+                        {
+                            "name": "loss",
+                            "numberValue": result["loss"],
+                            "format": "RAW"
+                        }
+                    ]
+                },
+            },
+        )
