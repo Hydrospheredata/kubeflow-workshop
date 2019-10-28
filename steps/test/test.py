@@ -18,9 +18,9 @@ os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
 def main(hydrosphere_uri, application_name, acceptable_accuracy, sample_size, *args, **kwargs):
     # Prepare data inputs
-    with np.load(os.path.join(INPUTS_DIR, "t10k", "imgs.npz")) as data:
+    with np.load(os.path.join(INPUTS_DIR, "imgs.npz")) as data:
         images = data["imgs"][:sample_size]
-    with np.load(os.path.join(INPUTS_DIR, "t10k", "labels.npz")) as data:
+    with np.load(os.path.join(INPUTS_DIR, "labels.npz")) as data:
         labels = data["labels"].astype(int)[:sample_size]
     
     # Define variables 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     if unknown: 
         logger.warning(f"Parsed unknown args: {unknown}")
 
-    inputs = [(args.data_path, INPUTS_DIR)]
+    inputs = [(os.path.join(args.data_path, "t10k"), INPUTS_DIR)]
     logs_bucket = wo.parse_bucket(args.data_path, with_scheme=True)
     params = {"uri.hydrosphere": "http://localhost"}
 
