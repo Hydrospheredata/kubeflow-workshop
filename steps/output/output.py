@@ -1,13 +1,17 @@
-import logging, sys 
+import logging, sys, os
 
+os.makedirs("logs", exist_ok=True)
+logs_file = "logs/step_output.log"
 logging.basicConfig(level=logging.INFO, 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("download.log")])
+    format="%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s.%(lineno)d - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logs_file)])
 logger = logging.getLogger(__name__)
 
 import argparse, datetime
 import os, csv, wo 
 
+OUTPUTS_DIR = "outputs"
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
@@ -24,19 +28,14 @@ if __name__ == '__main__':
     if unknown:
         logger.warning(f"Parsed unknown args: {unknown}")
     
-    w = wo.Orchestrator(dev=args.dev)
-    try:
-
-        # Download artifacts
-        pass 
-
-        # Initialize runtime variables
-        scheme, bucket, path = w.parse_uri(args.data_path)
-        output_path = os.path.join(
-            f"{scheme}://{bucket}", "mnist/run", str(round(datetime.datetime.now().timestamp())))
+    bucket = wo.parse_bucket(args.data_path, with_scheme=True)
+    timestamp = datetime.datetime.now().isoformat("T")
+    outputs = [(OUTPUTS_DIR, os.path.join(bucket, "run", timestamp))]
+    
+    with wo.Orchestrator(outputs=outputs, dev=args.dev) as w:
 
         # Execute main script
-        with open('output.csv', 'w+', newline='') as file:
+        with open(os.path.join(OUTPUTS_DIR, 'output.csv'), 'w+', newline='') as file:
             writer = csv.DictWriter(file, fieldnames=['key', 'value'])
             writer.writerows([
                 {'key': 'data-path', 'value': args.data_path},
@@ -49,24 +48,14 @@ if __name__ == '__main__':
                 {'key': 'integration-test-accuracy', 'value': args.integration_test_accuracy},
             ])
 
-        # Prepare variables for logging
-        outputs = {
+        w.log_execution(outputs={
             "mlpipeline-ui-metadata.json": {
                 'outputs': [{
                     'type': 'table',
-                    'storage': scheme,
+                    'storage': 's3',
                     'format': 'csv',
-                    'source': os.path.join(output_path, 'output.csv'),
+                    'source': os.path.join(bucket, 'run', timestamp, 'output.csv'),
                     'header': ['key', 'value']
                 }]
             },
-        }
-
-        # Upload artifacts 
-        w.upload_file('output.csv', os.path.join(output_path, 'output.csv'))
-        
-    except Exception as e:
-        logger.exception("Main execution script failed")
-    
-    finally: 
-        w.log_execution(outputs=outputs)
+        })
