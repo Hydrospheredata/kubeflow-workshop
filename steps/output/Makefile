@@ -29,7 +29,7 @@ build-container:
 
 test-container:
 	@echo Performing container run
-	docker run -v ~/.aws:/root/.aws \
+	docker run --rm -v ~/.aws:/root/.aws \
 		$(DOCKER_REGISTRY)/$(IMAGE_NAME):$(TAG) \
 		--data-path $(BUCKET)/data/$(SAMPLE_VERSION)/ \
 		--model-artifacts-path $(BUCKET)/model/mnist/$(SAMPLE_VERSION)/$(MODEL_VERSION)/ \

@@ -20,7 +20,7 @@ build-container:
 
 test-container:
 	@echo Performing container run
-	docker run -v ~/.aws:/root/.aws \
+	docker run --rm -v ~/.aws:/root/.aws \
 		$(DOCKER_REGISTRY)/$(IMAGE_NAME):$(TAG) \
 		--output-data-path $(BUCKET)/data \
 		--dev

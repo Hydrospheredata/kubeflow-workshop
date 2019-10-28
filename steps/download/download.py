@@ -122,4 +122,4 @@ if __name__ == "__main__":
 
         # Execution logging
         orchestrator.log_execution(
-            outputs={"output_data_path": os.path.join(args.output_data_path, result["sample_version"])})
+            outputs={"output_data_path": os.path.join(args.output_data_path, f"sample-version={result['sample_version']}")})

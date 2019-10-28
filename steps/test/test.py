@@ -29,6 +29,7 @@ def main(hydrosphere_uri, application_name, acceptable_accuracy, sample_size, *a
     logger.info(f"Using URL :: {service_link}")
 
     # Collect responses
+    retries = 10
     predicted = []
     for index, image in enumerate(images):
         try: 
@@ -37,8 +38,12 @@ def main(hydrosphere_uri, application_name, acceptable_accuracy, sample_size, *a
             logger.info(f"{index} | {round(index / len(images) * 100)}% \n{response.text}")
             predicted.append(response.json()["class_ids"][0][0])
         except Exception as e:
-            logger.warning(str(e))
-            time.sleep(5)
+            if retries: 
+                logger.warning(str(e))
+                retries -= 1 
+                time.sleep(5)
+            else: 
+                raise
         finally: 
             time.sleep(requests_delay)
     

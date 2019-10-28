@@ -167,7 +167,12 @@ if __name__ == "__main__":
 
         w.log_execution(
             outputs={
-                "model_path": os.path.join(args.model_path, model_version), 
+                "accuracy": result["accuracy"].item(),
+                "num_classes": result["num_classes"],
+                "average_loss": result["average_loss"].item(),
+                "global_step": result["global_step"].item(),
+                "loss": result["loss"].item(),
+                "model_path": os.path.join(args.model_path, model_path), 
                 "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI
                     "metrics": [
                         {
@@ -186,13 +191,13 @@ if __name__ == "__main__":
                     'outputs': [
                         {
                             'type': 'tensorboard',
-                            'source': os.path.join(args.model_path, model_version),
+                            'source': os.path.join(args.model_path, model_path),
                         },
                         {
                             'type': 'table',
                             'storage': 's3',
                             'format': 'csv',
-                            'source': os.path.join(args.model_path, model_version, "cm.csv"),
+                            'source': os.path.join(args.model_path, model_path, "cm.csv"),
                             'header': [
                                 'one', 'two', 'three', 'four', 'five', 
                                 'six', 'seven', 'eight', 'nine', 'ten'

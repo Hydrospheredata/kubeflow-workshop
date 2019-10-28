@@ -18,7 +18,7 @@ args = parser.parse_args()
 
 # Create client
 client = kfp.Client(args.kubeflow)
-run_name = namesgenerator.get_random_name() if not args.run_name else args.run_name
+run_name = 'mnist_' + namesgenerator.get_random_name() if not args.run_name else args.run_name
 
 try:
     experiment_id = client.get_experiment(experiment_name=args.experiment).id
