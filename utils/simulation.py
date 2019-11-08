@@ -1,10 +1,11 @@
-import importlib.util, psycopg2
+# import psycopg2
+import importlib.util
 import grpc, time, os, argparse
 from tqdm import tqdm
 import numpy as np
 import hydro_serving_grpc as hs
 import hashlib
-from decouple import Config, RepositoryEnv
+# from decouple import Config, RepositoryEnv
 
 # config = Config(RepositoryEnv("../config.env"))
 # POSTGRES_USER = config("POSTGRES__USER")
@@ -14,11 +15,12 @@ from decouple import Config, RepositoryEnv
 # POSTGRES_DB = config("POSTGRES__DB")
 
 
-def generate_data(base_path, test_file, shuffle=False):
+def generate_data(base_path, imgs_file, labels_file, shuffle=False):
     # Read mages & labels, shuffle them and return
-    with np.load(os.path.join(base_path, test_file)) as data:
-        imgs, labels = data["imgs"], data["labels"]
-        assert len(imgs) == len(labels)
+    with np.load(os.path.join(base_path, imgs_file)) as data:
+        imgs = data["imgs"]
+    with np.load(os.path.join(base_path, labels_file)) as data:
+        labels = data["labels"]  
     imgs = np.reshape(imgs, (len(imgs), 28, 28, 1))
     if shuffle:
         permute = np.random.permutation(len(imgs))
@@ -26,7 +28,7 @@ def generate_data(base_path, test_file, shuffle=False):
     return imgs, labels
 
 
-def simulate_production_traffic(path="./data", application_name="mnist_app", host=None, request_delay=1, request_amount=10000, file="test.npz", shuffle=False):
+def simulate_production_traffic(path="./data", application_name="mnist_app", host=None, request_delay=1, request_amount=10000, imgs_file="imgs.npz", labels_file="labels.npz", shuffle=False):
     # conn = psycopg2.connect(f"postgresql://{POSTGRES_USER}:{POSTGRES_PASS}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}")
     # cur = conn.cursor()
 
@@ -54,7 +56,7 @@ def simulate_production_traffic(path="./data", application_name="mnist_app", hos
         hs.TensorShapeProto.Dim(size=1),
     ])
 
-    images, labels = generate_data(path, file, shuffle=shuffle)
+    images, labels = generate_data(path, imgs_file, labels_file, shuffle=shuffle)
     for index, (image, label) in tqdm(enumerate(zip(images, labels)), total=request_amount):
         if index == request_amount: break
         if not image.flags['C_CONTIGUOUS']:
