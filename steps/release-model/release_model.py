@@ -23,8 +23,9 @@ def main(drift_detector_app, model_name, runtime, payload, metadata, hydrosphere
         sdk.Monitoring('Accuracy').with_spec('AccuracyMetricSpec'),
         sdk.Monitoring('Drift Detector').with_health(True) \
             .with_spec(
-                kind='ImageAEMetricSpec', 
+                kind='CustomModelMetricSpec', 
                 threshold=0.15, 
+                operator="<=",
                 application=drift_detector_app
             )
     ]

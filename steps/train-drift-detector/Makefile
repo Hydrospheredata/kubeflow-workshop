@@ -47,3 +47,4 @@ clean:
 	rm -rf logs
 	rm -rf model_path
 	rm -rf mlpipeline-metrics.json
+	rm -rf loss

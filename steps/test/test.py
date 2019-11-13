@@ -41,6 +41,7 @@ def main(hydrosphere_uri, application_name, acceptable_accuracy, sample_size, *a
             if retries: 
                 logger.warning(str(e))
                 retries -= 1 
+                predicted.append(-1)
                 time.sleep(5)
             else: 
                 raise

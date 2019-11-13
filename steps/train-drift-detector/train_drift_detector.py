@@ -125,7 +125,7 @@ def main(data_path, model_path, learning_rate, batch_size, steps, full_model_pat
                     "logits": tf.placeholder(dtype=tf.float32, shape=(None, num_classes)),
                     "classes": tf.placeholder(dtype=tf.string, shape=(None, 1)),
                 }, 
-                outputs={"score": score})
+                outputs={"value": score})
         }
 
         shutil.rmtree(full_model_path, ignore_errors=True) # in case folder exists 

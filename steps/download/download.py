@@ -95,8 +95,8 @@ def main(uri):
         logger.warning(f"Cleaning {output_directory} from the old files")
         shutil.rmtree(os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}"))
     
-    shutil.move("data/train", os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}"))
-    shutil.move("data/t10k", os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}"))
+    shutil.move("data/train", os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}", "train"))
+    shutil.move("data/t10k", os.path.join(OUTPUTS_DIR, f"sample-version={sample_version}", "t10k"))
     return {"sample_version": sample_version}
 
 

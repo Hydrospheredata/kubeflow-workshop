@@ -32,7 +32,10 @@ if __name__ == '__main__':
     timestamp = datetime.datetime.now().isoformat("T")
     outputs = [(OUTPUTS_DIR, os.path.join(bucket, "run", timestamp))]
     
-    with wo.Orchestrator(outputs=outputs, dev=args.dev) as w:
+    with wo.Orchestrator(
+        outputs=outputs, dev=args.dev, logs_file=logs_file, 
+        logs_bucket=wo.parse_bucket(args.data_path, with_scheme=True),
+    ) as w:
 
         # Execute main script
         with open(os.path.join(OUTPUTS_DIR, 'output.csv'), 'w+', newline='') as file:
