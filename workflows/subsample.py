@@ -266,21 +266,6 @@ def pipeline_definition(
         ],
     ).after(test_model)
 
-    dsl.ContainerOp(
-        name="write_output",
-        image=f"{registry}/mnist-pipeline-output:{tag}", 
-        arguments=[
-            '--data-path', subsample.outputs["output_data_path"],
-            '--model-artifacts-path', train_model.outputs["model_path"], 
-            '--drift-detector-artifacts-path', train_drift_detector.outputs["model_path"],
-            '--model-uri', release_model.outputs["model_uri"],
-            '--drift-detector-uri', release_drift_detector.outputs["model_uri"],
-            '--model-application-uri', deploy_drift_detector_to_prod.outputs["application_uri"],
-            '--drift-detector-application-uri', deploy_model_to_prod.outputs["application_uri"], 
-            '--integration-test-accuracy', test_model.outputs["integration_test_accuracy"],
-        ]
-    )
-
 
 if __name__ == "__main__":
     import kfp.compiler as compiler

@@ -188,6 +188,7 @@ if __name__ == "__main__":
                     ]
                 },
                 "mlpipeline-ui-metadata.json": {    # mlpipeline-ui-metadata.json lets us enrich Artifacts section of the ComponentOp
+                    'version': 1, 
                     'outputs': [
                         {
                             'type': 'tensorboard',
