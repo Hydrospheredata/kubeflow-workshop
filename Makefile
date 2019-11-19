@@ -1,7 +1,7 @@
 KUBEFLOW ?= <hydrosphere>
-EXPERIMENT ?= Default
+EXPERIMENT ?= MNIST
 REGISTRY ?= hydrosphere
-TAG ?= v2
+TAG ?= v3
 CONFIGMAP ?= mnist-workflow
 
 all: origin

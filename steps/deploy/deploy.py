@@ -1,8 +1,10 @@
-import logging, sys
+import logging, sys, os
 
+os.makedirs("logs", exist_ok=True)
+logs_file = "logs/step_deploy.log"
 logging.basicConfig(level=logging.INFO, 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("deploy.log")])
+    format="%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s.%(lineno)d - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logs_file)])
 logger = logging.getLogger(__name__)
 
 import argparse, datetime
@@ -11,7 +13,7 @@ from hydrosdk import sdk
 import wo
 
 
-def main(model_name, model_version, application_name, hydrosphere_uri):
+def main(model_name, model_version, application_name, hydrosphere_uri, *args, **kwargs):
     logger.info(f"Referencing existing model `{model_name}:{model_version}`")
     model = sdk.Model.from_existing(model_name, model_version)
     logger.info(f"Creating singular application `{application_name}`")
@@ -23,7 +25,7 @@ def main(model_name, model_version, application_name, hydrosphere_uri):
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data-path', required=True)  # Required for inferring bucket, where to store logs
+    parser.add_argument('--data-path', required=True)
     parser.add_argument('--model-version', required=True)
     parser.add_argument('--model-name', required=True)
     parser.add_argument('--application-name-postfix', required=True)
@@ -32,49 +34,29 @@ if __name__ == '__main__':
     if unknown: 
         logger.warning(f"Parsed unknown args: {unknown}")
 
-    w = wo.Orchestrator(
-        default_logs_path="mnist/logs",
-        default_params={
-            "uri.hydrosphere": "https://dev.k8s.hydrosphere.io"
-        },
-        dev=args.dev,
-    )
-    config = w.get_config()
+    logs_bucket = wo.parse_bucket(args.data_path, with_scheme=True)
+    params = {"uri.hydrosphere": "http://localhost"}
+
+    with wo.Orchestrator(
+        logs_file=logs_file, logs_bucket=logs_bucket,
+        default_params=params, dev=args.dev,
+    ) as w: 
     
-    try:
-
-        # Download artifacts
-        pass
-
-        # Initialize runtime variables
-        hydrosphere_uri = config["uri.hydrosphere"]
-        application_name = f"{args.model_name}{args.application_name_postfix}"
-
+        
         # Execute main script
+        config = w.get_config()
+        application_name = f"{args.model_name}{args.application_name_postfix}"
         main(
-            model_name=args.model_name,
-            model_version=args.model_version,
-            application_name=application_name, 
-            hydrosphere_uri=hydrosphere_uri,
+            **vars(args), 
+            hydrosphere_uri=config["uri.hydrosphere"],
+            application_name=application_name,
         )
 
-        # Prepare variables for logging
-        application_uri = urllib.parse.urljoin(
-            config["uri.hydrosphere"], f"applications/{application_name}")
-
-        # Upload artifacts
-        pass 
-        
-    except Exception as e:
-        logger.exception("Main execution script failed")
-    
-    finally: 
-        scheme, bucket, path = w.parse_uri(args.data_path)
+        # Execution logging 
         w.log_execution(
             outputs={
-                "application_name": application_name,
-                "application_uri": application_uri,
-            },
-            logs_bucket=f"{scheme}://{bucket}",
-            logs_file="deploy.log",
+                "application_name": f"{args.model_name}{args.application_name_postfix}",
+                "application_uri": urllib.parse.urljoin(
+                    config["uri.hydrosphere"], f"applications/{application_name}"),
+            }
         )

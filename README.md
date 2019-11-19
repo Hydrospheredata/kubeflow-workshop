@@ -42,6 +42,7 @@ data:
 ```
 
 ## Operations management
+
 * Build, test and publish all steps of the workflow
     ```
     $ make release-all-steps

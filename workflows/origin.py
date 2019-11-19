@@ -105,7 +105,7 @@ def pipeline_definition(
             "output_data_path": "/output_data_path",
             "logs_path": "/logs_path",
         },
-        arguments=["--output-data-path", "s3://workshop-hydrosphere/mnist/data"],
+        arguments=["--output-data-path", f"s3://{bucket}/data"],
     )
 
     train_drift_detector = dsl.ContainerOp(
@@ -118,7 +118,7 @@ def pipeline_definition(
         },
         arguments=[
             "--data-path", download.outputs["output_data_path"],
-            "--model-path", "s3://workshop-hydrosphere/mnist/model",
+            "--model-path", f"s3://{bucket}/model",
             "--model-name", model_drift_detector_name,
             "--learning-rate", drift_detector_learning_rate,
             "--batch-size", drift_detector_batch_size,
@@ -140,7 +140,7 @@ def pipeline_definition(
         },
         arguments=[
             "--data-path", download.outputs["output_data_path"],
-            "--model-path", "s3://workshop-hydrosphere/mnist/model",
+            "--model-path", f"s3://{bucket}/model",
             "--model-name", model_name,
             "--learning-rate", model_learning_rate,
             "--batch-size", model_batch_size,
@@ -153,7 +153,8 @@ def pipeline_definition(
         image=f"{registry}/mnist-pipeline-release-drift-detector:{tag}", 
         file_outputs={
             "model_version": "/model_version",
-            "model_uri": "/model_uri"
+            "model_uri": "/model_uri",
+            "logs_path": "/logs_path",
         },
         arguments=[
             "--data-path", download.outputs["output_data_path"],
@@ -171,7 +172,8 @@ def pipeline_definition(
         image=f"{registry}/mnist-pipeline-deploy:{tag}",  
         file_outputs={
             "application_name": "/application_name",
-            "application_uri": "/application_uri"
+            "application_uri": "/application_uri",
+            "logs_path": "/logs_path",
         },
         arguments=[
             "--data-path", download.outputs["output_data_path"],
@@ -186,7 +188,8 @@ def pipeline_definition(
         image=f"{registry}/mnist-pipeline-release-model:{tag}", 
         file_outputs={
             "model_version": "/model_version",
-            "model_uri": "/model_uri"
+            "model_uri": "/model_uri",
+            "logs_path": "/logs_path",
         },
         arguments=[
             "--drift-detector-app", deploy_drift_detector_to_prod.outputs["application_name"],
@@ -208,7 +211,8 @@ def pipeline_definition(
         image=f"{registry}/mnist-pipeline-deploy:{tag}",  
         file_outputs={
             "application_name": "/application_name",
-            "application_uri": "/application_uri"
+            "application_uri": "/application_uri",
+            "logs_path": "/logs_path",
         },
         arguments=[
             "--data-path", download.outputs["output_data_path"],
@@ -223,6 +227,7 @@ def pipeline_definition(
         image=f"{registry}/mnist-pipeline-test:{tag}", 
         file_outputs={
             "integration_test_accuracy": "/integration_test_accuracy",
+            "logs_path": "/logs_path",
         },
         arguments=[
             "--data-path", download.outputs["output_data_path"],
@@ -237,7 +242,8 @@ def pipeline_definition(
         image=f"{registry}/mnist-pipeline-deploy:{tag}",  
         file_outputs={
             "application_name": "/application_name",
-            "application_uri": "/application_uri"
+            "application_uri": "/application_uri",
+            "logs_path": "/logs_path",
         },
         arguments=[
             "--data-path", download.outputs["output_data_path"],
@@ -247,21 +253,6 @@ def pipeline_definition(
         ],
     ).after(test_model)
 
-    dsl.ContainerOp(
-        name="write_output",
-        image=f"{registry}/mnist-pipeline-output:{tag}", 
-        arguments=[
-            '--data-path', download.outputs["output_data_path"],
-            '--model-artifacts-path', train_model.outputs["model_path"], 
-            '--drift-detector-artifacts-path', train_drift_detector.outputs["model_path"],
-            '--model-uri', release_model.outputs["model_uri"],
-            '--drift-detector-uri', release_drift_detector.outputs["model_uri"],
-            '--model-application-uri', deploy_drift_detector_to_prod.outputs["application_uri"],
-            '--drift-detector-application-uri', deploy_model_to_prod.outputs["application_uri"], 
-            '--integration-test-accuracy', test_model.outputs["integration_test_accuracy"],
-        ], 
-    )
-
 
 if __name__ == "__main__":
     import kfp.compiler as compiler
@@ -269,14 +260,17 @@ if __name__ == "__main__":
 
     # Get parameters	
     parser = argparse.ArgumentParser()	
+    parser.add_argument('-b', '--bucket',
+        help="Which bucket to use, when uploading steps outputs", default="workshop-hydrosphere-mnist")
     parser.add_argument('-t', '--tag', 
-        help="Which tag of image to use, when compiling pipeline", default="v2")
+        help="Which tag of image to use, when compiling pipeline", default="v3")
     parser.add_argument('-r', '--registry', 
         help="Which docker registry to use, when compiling pipeline", default="hydrosphere")
     parser.add_argument('-c', '--configmap', 
         help="Which ConfigMap to use, when executing pipeline", default="mnist-workflow")
     args = parser.parse_args()
     
+    bucket = args.bucket
     tag = args.tag
     registry = args.registry
     configmap = args.configmap

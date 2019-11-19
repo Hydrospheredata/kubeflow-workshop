@@ -1,5 +1,6 @@
 IMAGE_NAME = mnist-pipeline-download
 DOCKER_REGISTRY ?= hydrosphere
+BUCKET ?= s3://workshop-hydrosphere-mnist
 TAG ?= latest
 
 all: test-local prepare build-container clean test-container push-container
@@ -9,7 +10,7 @@ release-raw: build-container clean push-container
 test-local:
 	@echo Performing local run
 	python3 download.py \
-		--output-data-path s3://workshop-hydrosphere/mnist/data \
+		--output-data-path $(BUCKET)/data \
 		--dev
 
 # DOCKER_BUILD_OPTS env var can be used to configure build step
@@ -19,9 +20,9 @@ build-container:
 
 test-container:
 	@echo Performing container run
-	docker run -v ~/.aws:/root/.aws \
+	docker run --rm -v ~/.aws:/root/.aws \
 		$(DOCKER_REGISTRY)/$(IMAGE_NAME):$(TAG) \
-		--output-data-path s3://workshop-hydrosphere/mnist/data \
+		--output-data-path $(BUCKET)/data \
 		--dev
 
 push-container: 
@@ -30,4 +31,8 @@ push-container:
 
 clean:
 	@echo Cleaning folder
-	rm -rf data cloud.py *.log logs_path output_data_path
+	rm -rf data
+	rm -rf outputs
+	rm -rf logs
+	rm -rf output_data_path
+	rm -rf logs_path
