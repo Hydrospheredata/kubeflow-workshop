@@ -48,3 +48,9 @@ clean:
 	rm -rf mlpipeline-metrics.json
 	rm -rf mlpipeline-ui-metadata.json
 	rm -rf model_path
+	rm -rf loss
+	rm -rf accuracy
+	rm -rf average_loss
+	rm -rf accuracy_loss
+	rm -rf global_step
+	rm -rf num_classes

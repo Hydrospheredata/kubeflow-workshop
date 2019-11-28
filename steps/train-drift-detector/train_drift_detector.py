@@ -157,8 +157,8 @@ if __name__ == "__main__":
     inputs = [(args.data_path, INPUTS_DIR)]
     outputs = [(OUTPUTS_DIR, args.model_path)]
     logs_bucket = wo.parse_bucket(args.data_path, with_scheme=True)
-    experiment = "Default.kubeflow-mnist-drift-detector"
-    params = {"uri.mlflow": "http://mlflow.k8s.hydrosphere.io"}
+    experiment = "MNIST Drift Detector"
+    params = {"uri.mlflow": "http://mlflow.eks.hydrosphere.io"}
 
     with wo.Orchestrator(inputs=inputs, outputs=outputs,
         logs_file=logs_file, logs_bucket=logs_bucket,
@@ -174,8 +174,12 @@ if __name__ == "__main__":
         # Execute main script
         result = main(**vars(args), full_model_path=os.path.join(OUTPUTS_DIR, model_path))
 
+        parameters = vars(args).copy()
+        parameters['model_path'] = model_path
+
         # Execution logging
         w.log_execution(
+            parameters=parameters,
             outputs={
                 "model_path": os.path.join(args.model_path, model_path),
                 "mlpipeline-metrics.json": {       # mlpipeline-metrics.json lets us enrich Kubeflow UI

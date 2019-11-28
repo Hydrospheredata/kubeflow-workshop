@@ -18,9 +18,6 @@ os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
 def main(drift_detector_app, model_name, runtime, payload, metadata, hydrosphere_uri, *args, **kwargs):
     monitoring = [
-        sdk.Monitoring('Requests').with_spec('CounterMetricSpec', interval=15),
-        sdk.Monitoring('Latency').with_spec('LatencyMetricSpec', interval=15),
-        sdk.Monitoring('Accuracy').with_spec('AccuracyMetricSpec'),
         sdk.Monitoring('Drift Detector').with_health(True) \
             .with_spec(
                 kind='CustomModelMetricSpec', 
