@@ -12,12 +12,12 @@ subsample: compile-subsample submit-subsample clean
 compile-origin:
 	python3 workflows/origin.py -t $(TAG) -r $(REGISTRY) -c $(CONFIGMAP)
 submit-origin:
-	python3 utils/kubeflow.py -f origin.tar.gz -e "$(EXPERIMENT)" -k $(KUBEFLOW)
+	python3 kubeflow.py -f origin.tar.gz -e "$(EXPERIMENT)" -k $(KUBEFLOW)
 
 compile-subsample:
 	python3 workflows/subsample.py -t $(TAG) -r $(REGISTRY) -c $(CONFIGMAP)
 submit-subsample:
-	python3 utils/kubeflow.py -f subsample.tar.gz -e "$(EXPERIMENT)" -k $(KUBEFLOW)  
+	python3 kubeflow.py -f subsample.tar.gz -e "$(EXPERIMENT)" -k $(KUBEFLOW)  
 
 release-all-steps:
 	@for path in download train-drift-detector train-model release-drift-detector release-model deploy output test; do \
